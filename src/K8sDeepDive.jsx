@@ -48,39 +48,108 @@ export default function K8sDeepDive() {
     setSelectedYamlField(null);
   }, []);
 
-  // Keyboard navigation
+  // Comprehensive keyboard navigation
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.target.tagName === 'INPUT') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
       
+      // Flow view navigation (left/right arrows and space)
       if (activeView === 'flow') {
-        if (e.key === 'ArrowRight') setFlowStep(s => Math.min(7, s + 1));
-        if (e.key === 'ArrowLeft') setFlowStep(s => Math.max(0, s - 1));
-        if (e.key === ' ') { e.preventDefault(); setIsFlowPlaying(p => !p); }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setFlowStep(s => Math.min(7, s + 1));
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setFlowStep(s => Math.max(0, s - 1));
+        }
+        if (e.key === ' ' || e.key === 'Spacebar') {
+          e.preventDefault();
+          setIsFlowPlaying(p => !p);
+        }
       }
+      
+      // Ingress view navigation (left/right arrows and space)
       if (activeView === 'ingress') {
-        if (e.key === 'ArrowRight') setIngressStep(s => Math.min(5, s + 1));
-        if (e.key === 'ArrowLeft') setIngressStep(s => Math.max(0, s - 1));
-        if (e.key === ' ') { e.preventDefault(); setIsIngressPlaying(p => !p); }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setIngressStep(s => Math.min(5, s + 1));
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setIngressStep(s => Math.max(0, s - 1));
+        }
+        if (e.key === ' ' || e.key === 'Spacebar') {
+          e.preventDefault();
+          setIsIngressPlaying(p => !p);
+        }
       }
+      
+      // Scheduler view navigation (up/down arrows)
       if (activeView === 'scheduler') {
-        if (e.key === 'ArrowDown') { e.preventDefault(); setSchedulerStep(s => Math.min(6, s + 1)); }
-        if (e.key === 'ArrowUp') { e.preventDefault(); setSchedulerStep(s => Math.max(0, s - 1)); }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSchedulerStep(s => Math.min(6, s + 1));
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSchedulerStep(s => Math.max(0, s - 1));
+        }
       }
-      if (e.key === 'Escape') {
+      
+      // Escape key - clear selections
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        e.preventDefault();
         setSelectedComponent(null);
         setFailedComponent(null);
         setTrafficSimulation(false);
         setSelectedYamlField(null);
+        if (activeView === 'flow') {
+          setIsFlowPlaying(false);
+        }
+        if (activeView === 'ingress') {
+          setIsIngressPlaying(false);
+        }
       }
-      if (e.key === '1') { setActiveView('architecture'); resetAll(); }
-      if (e.key === '2') { setActiveView('flow'); resetAll(); }
-      if (e.key === '3') { setActiveView('scheduler'); resetAll(); }
-      if (e.key === '4') { setActiveView('networking'); resetAll(); }
-      if (e.key === '5') { setActiveView('ingress'); resetAll(); }
-      if (e.key === '6') { setActiveView('troubleshooting'); resetAll(); }
-      if (e.key === '7') { setActiveView('quiz'); resetAll(); }
+      
+      // Number keys 1-7 for view switching
+      if (e.key === '1') {
+        e.preventDefault();
+        setActiveView('architecture');
+        resetAll();
+      }
+      if (e.key === '2') {
+        e.preventDefault();
+        setActiveView('flow');
+        resetAll();
+      }
+      if (e.key === '3') {
+        e.preventDefault();
+        setActiveView('scheduler');
+        resetAll();
+      }
+      if (e.key === '4') {
+        e.preventDefault();
+        setActiveView('networking');
+        resetAll();
+      }
+      if (e.key === '5') {
+        e.preventDefault();
+        setActiveView('ingress');
+        resetAll();
+      }
+      if (e.key === '6') {
+        e.preventDefault();
+        setActiveView('troubleshooting');
+        resetAll();
+      }
+      if (e.key === '7') {
+        e.preventDefault();
+        setActiveView('quiz');
+        resetAll();
+      }
     };
+    
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [activeView, resetAll]);
