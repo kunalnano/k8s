@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback, useId } from 'react';
+import React, { useState, useEffect } from 'react';
+
+// Get API key from environment variable
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 export default function K8sDeepDive() {
   const [activeView, setActiveView] = useState('architecture');
@@ -17,303 +20,137 @@ export default function K8sDeepDive() {
   const [failedComponent, setFailedComponent] = useState(null);
   const [trafficSimulation, setTrafficSimulation] = useState(false);
   const [simulationStatus, setSimulationStatus] = useState("");
-  
-  // YAML Mapping State
-  const [selectedYamlField, setSelectedYamlField] = useState(null);
-  const [showYamlPanel, setShowYamlPanel] = useState(false);
 
-  // Ingress State
-  const [ingressStep, setIngressStep] = useState(0);
-  const [isIngressPlaying, setIsIngressPlaying] = useState(false);
+  // AI Integration State
+  const [aiResponse, setAiResponse] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [troubleshootQuery, setTroubleshootQuery] = useState("");
 
   // Quiz State
   const [quizScore, setQuizScore] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [showQuizResult, setShowQuizResult] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
-  const [quizDifficulty, setQuizDifficulty] = useState('beginner');
-  const [quizHistory, setQuizHistory] = useState(() => {
-    const saved = localStorage.getItem('k8s-quiz-history');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Troubleshooting State
-  const [troubleshootingSearch, setTroubleshootingSearch] = useState('');
-  const [troubleshootingFilter, setTroubleshootingFilter] = useState('all');
-
-  // AI Integration State
-  const [aiResponse, setAiResponse] = useState(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
-  const [troubleshootQuery, setTroubleshootQuery] = useState('');
-  
-  // API Key from environment variable (create .env with VITE_GEMINI_API_KEY=your_key)
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
   // Set page title
   useEffect(() => {
     document.title = "Kubernetes Internals — Interactive Deep Dive";
   }, []);
 
-  const resetAll = useCallback(() => {
-    setFlowStep(0);
-    setIsFlowPlaying(false);
-    setIngressStep(0);
-    setIsIngressPlaying(false);
-    setSchedulerStep(0);
-    setSelectedComponent(null);
-    setFailedComponent(null);
-    setTrafficSimulation(false);
-    setSimulationStatus("");
-    setSelectedYamlField(null);
-  }, []);
+  // Clear AI response when component changes
+  useEffect(() => {
+    setAiResponse(null);
+    setAiError(null);
+  }, [selectedComponent]);
 
-  // ==================== AI INTEGRATION ====================
-  
-  /**
-   * Call Gemini API with exponential backoff retry
-   */
-  const callGemini = useCallback(async (prompt, maxRetries = 3) => {
+  // Gemini API Caller
+  const callGemini = async (prompt) => {
     if (!GEMINI_API_KEY) {
-      throw new Error('Gemini API key not configured. Create .env file with VITE_GEMINI_API_KEY=your_key');
+      setAiError("Add VITE_GEMINI_API_KEY to your .env file");
+      return;
     }
-
-    // Using v1beta API with gemini-2.5-flash-preview (user's working config)
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
     
-    let lastError;
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiResponse(null);
+
+    let retries = 0;
+    let success = false;
+
+    while (retries <= 3 && !success) {
       try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-          })
-        });
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }]
+            })
+          }
+        );
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `API error: ${response.status}`);
+          if (response.status === 429 || response.status >= 500) {
+            throw new Error(`Retryable error: ${response.status}`);
+          }
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `API Error: ${response.status}`);
         }
 
         const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error('Empty response from Gemini');
-        return text;
-      } catch (error) {
-        lastError = error;
-        if (attempt < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.");
+        success = true;
+      } catch (e) {
+        retries++;
+        if (retries > 3) {
+          setAiError(e.message || "Failed to connect to AI. Please try again.");
+        } else {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
         }
       }
     }
-    throw lastError;
-  }, [GEMINI_API_KEY]);
+    setIsAiLoading(false);
+  };
 
-  /**
-   * Get AI explanation for a Kubernetes component
-   */
-  const handleAiExplain = useCallback(async (componentId, componentDetails) => {
-    const component = componentDetails[componentId];
-    if (!component) return;
+  const handleAiComponentQuery = () => {
+    if (!selectedComponent) return;
+    const comp = componentDetails[selectedComponent];
+    const prompt = `You are a Kubernetes Senior Engineer. Explain the internal workings of the "${comp.name}" component (${comp.role}). 
+    Focus on its relationship with the API Server and how it handles failure. 
+    Explain it simply but technically for a DevOps engineer. Keep it under 100 words.`;
+    callGemini(prompt);
+  };
 
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiResponse(null);
+  const handleAiTroubleshoot = () => {
+    if (!troubleshootQuery) return;
+    const prompt = `You are a Kubernetes Expert. A user is reporting this issue: "${troubleshootQuery}".
+    Provide a concise technical diagnosis and a list of 3 specific 'kubectl' commands to investigate or fix it. 
+    Format the output with Markdown, putting commands in code blocks.`;
+    callGemini(prompt);
+  };
 
-    const prompt = `You are a Kubernetes expert teacher. Explain the ${component.name} component.
-
-Context from our learning app:
-- Role: ${component.role}
-- Analogy: ${component.analogy}
-- Key internals: ${component.internals?.slice(0, 3).join('; ')}
-
-Please provide a concise response with:
-1. **Beginner Explanation** (2-3 sentences for someone new to K8s)
-2. **Production Insight** (one real-world tip from running K8s at scale)
-3. **Common Gotcha** (one mistake to avoid)
-
-Keep it practical and under 200 words.`;
-
-    try {
-      const response = await callGemini(prompt);
-      setAiResponse(response);
-    } catch (error) {
-      setAiError(error.message);
-    } finally {
-      setIsAiLoading(false);
-    }
-  }, [callGemini]);
-
-  /**
-   * Smart troubleshooting with AI
-   */
-  const handleSmartTroubleshoot = useCallback(async () => {
-    if (!troubleshootQuery.trim()) return;
-
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiResponse(null);
-
-    const prompt = `You are a Kubernetes troubleshooting expert. A user reports this issue:
-
-"${troubleshootQuery}"
-
-Provide a structured diagnosis:
-
-1. **Most Likely Cause** (one sentence)
-2. **Diagnostic Commands** (2-3 kubectl commands to run, with brief explanation)
-3. **Quick Fix** (step-by-step resolution, max 4 steps)
-4. **Prevention Tip** (how to avoid this in future)
-
-Be concise and actionable. Use markdown formatting.`;
-
-    try {
-      const response = await callGemini(prompt);
-      setAiResponse(response);
-    } catch (error) {
-      setAiError(error.message);
-    } finally {
-      setIsAiLoading(false);
-    }
-  }, [troubleshootQuery, callGemini]);
-
-  /**
-   * Clear AI response
-   */
-  const clearAiResponse = useCallback(() => {
-    setAiResponse(null);
-    setAiError(null);
-  }, []);
-
-  // Comprehensive keyboard navigation
+  // Keyboard navigation
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       
-      // Flow view navigation (left/right arrows and space)
       if (activeView === 'flow') {
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          setFlowStep(s => Math.min(7, s + 1));
-        }
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          setFlowStep(s => Math.max(0, s - 1));
-        }
-        if (e.key === ' ' || e.key === 'Spacebar') {
-          e.preventDefault();
-          setIsFlowPlaying(p => !p);
-        }
+        if (e.key === 'ArrowRight') setFlowStep(s => Math.min(7, s + 1));
+        if (e.key === 'ArrowLeft') setFlowStep(s => Math.max(0, s - 1));
+        if (e.key === ' ') { e.preventDefault(); setIsFlowPlaying(p => !p); }
       }
-      
-      // Ingress view navigation (left/right arrows and space)
-      if (activeView === 'ingress') {
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          setIngressStep(s => Math.min(5, s + 1));
-        }
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          setIngressStep(s => Math.max(0, s - 1));
-        }
-        if (e.key === ' ' || e.key === 'Spacebar') {
-          e.preventDefault();
-          setIsIngressPlaying(p => !p);
-        }
-      }
-      
-      // Scheduler view navigation (up/down arrows)
       if (activeView === 'scheduler') {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setSchedulerStep(s => Math.min(6, s + 1));
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setSchedulerStep(s => Math.max(0, s - 1));
-        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); setSchedulerStep(s => Math.min(6, s + 1)); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setSchedulerStep(s => Math.max(0, s - 1)); }
       }
-      
-      // Escape key - clear selections
-      if (e.key === 'Escape' || e.key === 'Esc') {
-        e.preventDefault();
+      if (e.key === 'Escape') {
         setSelectedComponent(null);
         setFailedComponent(null);
         setTrafficSimulation(false);
         setSimulationStatus("");
-        setSelectedYamlField(null);
-        if (activeView === 'flow') {
-          setIsFlowPlaying(false);
-        }
-        if (activeView === 'ingress') {
-          setIsIngressPlaying(false);
-        }
       }
-      
-      // Number keys 1-7 for view switching
-      if (e.key === '1') {
-        e.preventDefault();
-        setActiveView('architecture');
-        resetAll();
-      }
-      if (e.key === '2') {
-        e.preventDefault();
-        setActiveView('flow');
-        resetAll();
-      }
-      if (e.key === '3') {
-        e.preventDefault();
-        setActiveView('scheduler');
-        resetAll();
-      }
-      if (e.key === '4') {
-        e.preventDefault();
-        setActiveView('networking');
-        resetAll();
-      }
-      if (e.key === '5') {
-        e.preventDefault();
-        setActiveView('ingress');
-        resetAll();
-      }
-      if (e.key === '6') {
-        e.preventDefault();
-        setActiveView('troubleshooting');
-        resetAll();
-      }
-      if (e.key === '7') {
-        e.preventDefault();
-        setActiveView('quiz');
-        resetAll();
-      }
+      if (e.key === '1') { setActiveView('architecture'); resetAll(); }
+      if (e.key === '2') { setActiveView('flow'); resetAll(); }
+      if (e.key === '3') { setActiveView('scheduler'); resetAll(); }
+      if (e.key === '4') { setActiveView('networking'); resetAll(); }
+      if (e.key === '5') { setActiveView('troubleshooting'); resetAll(); }
+      if (e.key === '6') { setActiveView('quiz'); resetAll(); }
     };
-    
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [activeView, resetAll]);
+  }, [activeView]);
 
   // Auto-advance flow animation
   useEffect(() => {
     if (isFlowPlaying && flowStep < 7) {
-      const timer = setTimeout(() => setFlowStep(f => f + 1), 1800);
+      const timer = setTimeout(() => setFlowStep(f => f + 1), 2000);
       return () => clearTimeout(timer);
     } else if (flowStep >= 7) {
       setIsFlowPlaying(false);
     }
   }, [isFlowPlaying, flowStep]);
-
-  // Auto-advance ingress animation
-  useEffect(() => {
-    if (isIngressPlaying && ingressStep < 5) {
-      const timer = setTimeout(() => setIngressStep(s => s + 1), 1500);
-      return () => clearTimeout(timer);
-    } else if (ingressStep >= 5) {
-      setIsIngressPlaying(false);
-    }
-  }, [isIngressPlaying, ingressStep]);
 
   // Traffic Simulation Logic
   useEffect(() => {
@@ -339,206 +176,153 @@ Be concise and actionable. Use markdown formatting.`;
     }
   }, [trafficSimulation]);
 
+  const resetAll = () => {
+    setFlowStep(0);
+    setIsFlowPlaying(false);
+    setSchedulerStep(0);
+    setSelectedComponent(null);
+    setFailedComponent(null);
+    setTrafficSimulation(false);
+    setSimulationStatus("");
+    setAiResponse(null);
+    setTroubleshootQuery("");
+  };
+
   const componentDetails = {
     apiserver: {
       name: 'kube-apiserver',
       role: 'The Front Door & Traffic Cop',
-      analogy: 'Think of it as the receptionist at a hospital - every request (patient) must check in here first. It validates identity, checks permissions, and routes to the right department.',
+      analogy: 'The hospital receptionist. Checks ID, validates requests, and updates the database. The ONLY component that talks to Etcd.',
       internals: [
-        'Stateless - scales horizontally behind a load balancer',
-        'Only component that touches etcd directly',
-        'Runs Admission Controllers (mutating → validating) before persisting',
-        'All cluster communication flows through here - components never talk directly'
+        'Stateless - scales horizontally',
+        'Authentication -> Authorization -> Admission Control',
+        'Validating & Mutating Webhooks',
+        'Serves the REST API'
       ],
-      flow: 'kubectl apply → AuthN → AuthZ (RBAC) → Admission → etcd write → Watch notification to controllers',
-      scaleNote: '⚠️ Horizontal scaling required at ~500 nodes. Tune --max-requests-inflight.',
+      flow: 'User -> Load Balancer -> API Server -> Etcd',
+      scaleNote: '⚠️ CPU intensive. Scale horizontally behind a Load Balancer.',
       failure: {
-        symptom: 'All kubectl commands hang or timeout',
-        impact: 'Complete cluster management blackout. Running pods continue but no changes possible.',
-        check: 'kubectl cluster-info; curl -k https://<master>:6443/healthz',
-        recovery: 'Check API server pod logs, verify etcd connectivity, check certificates'
-      },
-      yamlFields: ['apiVersion', 'kind', 'metadata']
+        symptom: 'kubectl commands timeout. Cluster is unmanageable.',
+        impact: 'Existing pods run fine, but no updates or new pods possible.',
+        check: 'curl -k https://localhost:6443/livez',
+        recovery: 'Check system logs, ensure etcd connectivity.'
+      }
     },
     etcd: {
       name: 'etcd',
       role: 'The Source of Truth',
-      analogy: 'The hospital\'s medical records system. If this burns down, you lose who every patient is, what treatments they need, everything. Raft consensus = multiple copies in different buildings.',
+      analogy: 'The hospital records room. Highly secure, consistent storage. If this burns down, the cluster has amnesia.',
       internals: [
-        'Key-value store using Raft consensus (3 or 5 node quorum)',
-        'Stores ENTIRE cluster state: nodes, pods, configmaps, secrets, everything',
-        'Watches enable reactive updates - controllers subscribe to changes',
-        'Performance bottleneck at scale - limit to ~100 pods/second creation'
+        'Distributed Key-Value Store',
+        'Uses Raft Consensus Algorithm',
+        'Stores ALL cluster state',
+        'Strong Consistency'
       ],
-      flow: 'Write → Leader receives → Replicates to quorum → Commit → ACK back',
-      scaleNote: '🔴 CRITICAL: Never exceed 5 nodes. 3-node = survives 1 failure.',
+      flow: 'API Server <-> Etcd (gRPC)',
+      scaleNote: '🔴 Disk I/O sensitive. Use SSDs. Max 5 nodes recommended.',
       failure: {
-        symptom: 'Cluster completely frozen. API server returns 500s.',
-        impact: 'CATASTROPHIC. All state lost if no backup. Cluster unrecoverable without restore.',
-        check: 'etcdctl endpoint health; etcdctl member list',
-        recovery: 'Restore from snapshot: etcdctl snapshot restore. Prevent: automated backups to S3/GCS.'
-      },
-      yamlFields: ['metadata.name', 'metadata.namespace', 'metadata.labels']
+        symptom: 'API Server refuses requests. Cluster frozen.',
+        impact: 'CATASTROPHIC. Potential data loss if no backups.',
+        check: 'etcdctl endpoint health',
+        recovery: 'Restore from snapshot immediately.'
+      }
     },
     scheduler: {
       name: 'kube-scheduler',
       role: 'The Assignment Engine',
-      analogy: 'Like a hotel concierge assigning rooms. Guest (pod) arrives, concierge checks which rooms fit (filtering), then picks the best one based on preferences (scoring).',
+      analogy: 'The room assigner. Checks which rooms (nodes) have space and meet requirements (constraints) for new patients (pods).',
       internals: [
-        'Watches for Pods with spec.nodeName = empty',
-        'Filter phase: hard constraints (taints, affinity, resources)',
-        'Score phase: soft preferences (spread, bin-packing)',
-        'Binding: writes decision back to API server'
+        'Watches for Pods with empty nodeName',
+        'Filtering (Hard Constraints)',
+        'Scoring (Soft Constraints)',
+        'Binding (API Update)'
       ],
-      flow: 'New Pod detected → Filter nodes → Score remaining → Select winner → Bind to node',
-      scaleNote: '⚡ Single scheduler handles ~5000 nodes. Use multiple for multi-tenancy.',
+      flow: 'API Server -> Scheduler -> API Server',
+      scaleNote: '⚡ Can be a bottleneck for massive pod churn. Tune intervals.',
       failure: {
-        symptom: 'All new pods stuck in Pending state forever',
-        impact: 'No new workloads scheduled. Existing pods unaffected.',
-        check: 'kubectl get pods -n kube-system | grep scheduler',
-        recovery: 'Scheduler is stateless - just restart it. Check for resource exhaustion.'
-      },
-      yamlFields: ['spec.nodeSelector', 'spec.affinity', 'spec.tolerations']
+        symptom: 'Pods remain in "Pending" state forever.',
+        impact: 'New workloads do not start.',
+        check: 'kubectl get componentstatuses',
+        recovery: 'Restart scheduler pod/service.'
+      }
     },
     controller: {
       name: 'kube-controller-manager',
       role: 'The Reconciliation Army',
-      analogy: 'A team of janitors who each have one job: "Keep X clean." Deployment janitor ensures 3 replicas. Node janitor marks dead nodes. They work independently, reacting to etcd changes.',
+      analogy: 'The maintenance team. Thermostat checks temp (actual) vs setting (desired) and turns on heat. Controller checks pods vs replicas.',
       internals: [
-        'Single binary running ~30+ controllers in goroutines',
-        'Each controller watches specific resources via API server',
-        'Node controller: 5-minute timeout → mark NotReady → evict pods',
-        'ReplicaSet controller: diff current vs desired, create/delete pods'
+        'Run loop: Observe -> Diff -> Act',
+        'ReplicaSet, Node, Endpoint Controllers',
+        'Single binary, many loops',
+        'Leader Election'
       ],
-      flow: 'Watch event → Read desired state → Read actual state → Diff → Act → Loop',
-      scaleNote: '⚙️ Most controllers are leader-elected. Only one active at a time.',
+      flow: 'API Server -> Controller -> API Server',
+      scaleNote: '⚙️ Single active leader. Vertical scaling only.',
       failure: {
-        symptom: 'Deployments don\'t scale, dead nodes not detected, endpoints not updated',
-        impact: 'Cluster drift. Desired state diverges from actual state.',
-        check: 'kubectl get pods -n kube-system | grep controller',
-        recovery: 'Restart controller-manager. State will reconcile automatically.'
-      },
-      yamlFields: ['spec.replicas', 'spec.selector', 'spec.strategy']
+        symptom: 'Deployments dont scale. Dead nodes not detected.',
+        impact: 'Cluster state drifts from desired state.',
+        check: 'Check leader election logs.',
+        recovery: 'Restart controller manager.'
+      }
     },
     kubelet: {
       name: 'kubelet',
       role: 'The Node Captain',
-      analogy: 'The site foreman on a construction site. HQ (control plane) sends blueprints (PodSpecs), foreman makes sure the actual building matches. Reports status back up.',
+      analogy: 'The floor nurse. Receives orders for patients (pods), ensures they are alive (probes), and reports status back to HQ.',
       internals: [
-        'Runs on every node as a systemd service (not a pod!)',
-        'Talks to Container Runtime via CRI (gRPC)',
-        'Manages probes: Liveness (restart?), Readiness (route traffic?), Startup (delay probes?)',
-        'Reports node status (capacity, conditions) every 10s'
+        'Runs on EVERY node',
+        'Registers node with API Server',
+        'Pod Lifecycle Manager',
+        'Executes Liveness/Readiness Probes'
       ],
-      flow: 'Watch for PodSpecs → Pull images → Create sandbox → Start containers → Monitor → Report',
-      scaleNote: '📊 Each kubelet handles ~110 pods max by default. Tune --max-pods.',
+      flow: 'API Server -> Kubelet -> Runtime',
+      scaleNote: '📊 Heartbeat intervals affect API load. Limit ~110 pods/node.',
       failure: {
-        symptom: 'Node shows NotReady. Pods on that node evicted after 5 minutes.',
-        impact: 'Single node failure. Pods rescheduled elsewhere (if resources available).',
-        check: 'systemctl status kubelet; journalctl -u kubelet -f',
-        recovery: 'Check disk pressure, memory, kubelet certificates, container runtime health.'
-      },
-      yamlFields: ['spec.containers', 'spec.volumes', 'spec.restartPolicy']
+        symptom: 'Node status "NotReady". Pods unknown.',
+        impact: 'Scheduler stops sending pods to this node.',
+        check: 'systemctl status kubelet',
+        recovery: 'Check node resources (Disk/RAM), restart service.'
+      }
     },
     kubeproxy: {
       name: 'kube-proxy',
       role: 'The Network Plumber',
-      analogy: 'Like the building\'s HVAC routing system. When you call "billing department" (Service), it routes your call to one of the actual desks (Pod IPs) in that department.',
+      analogy: 'The switchboard operator. Ensures network rules exist so traffic to a "Department" (Service) gets to a specific "Phone" (Pod).',
       internals: [
-        'Implements Services by programming node network rules',
-        'iptables mode: O(n) rules - each Service = more latency at scale',
-        'IPVS mode: O(1) lookup via kernel hash table - use this at scale',
-        'Does NOT proxy traffic - just sets up rules so kernel handles it'
+        'Runs on EVERY node',
+        'Watches Services & Endpoints',
+        'Manages iptables or IPVS rules',
+        'Does NOT usually proxy data (in IPVS mode)'
       ],
-      flow: 'Watch Services/Endpoints → Update iptables/IPVS → Traffic flows via kernel',
-      scaleNote: '🚨 Switch to IPVS mode beyond 1000 Services. iptables = O(n) bottleneck.',
+      flow: 'API Server -> Kube-proxy -> Kernel Network Stack',
+      scaleNote: '🚨 Use IPVS mode for clusters with >1000 services.',
       failure: {
-        symptom: 'Services unreachable. ClusterIP connections timeout.',
-        impact: 'Service discovery broken on affected nodes. Pod-to-pod still works.',
-        check: 'kubectl get pods -n kube-system | grep proxy; iptables -t nat -L | grep KUBE',
-        recovery: 'Restart kube-proxy. Check for iptables rule corruption.'
-      },
-      yamlFields: ['spec.ports', 'spec.selector', 'spec.type']
+        symptom: 'Service IPs unreachable. DNS works, connection fails.',
+        impact: 'Internal communication breaks.',
+        check: 'iptables -L -n -t nat',
+        recovery: 'Restart kube-proxy, flush iptables.'
+      }
     },
     runtime: {
       name: 'Container Runtime',
       role: 'The Execution Engine',
-      analogy: 'The actual construction workers. Kubelet says "build this container," runtime actually pulls materials (images) and constructs it (namespaces, cgroups).',
+      analogy: 'The actual bed/equipment. containerd or CRI-O. It does the heavy lifting of pulling images and running the process.',
       internals: [
-        'containerd is the standard (Docker is now just a shim around it)',
-        'Uses OCI images and runtimes (runc for Linux namespaces)',
-        'Handles image pulling, layer caching, lifecycle management',
-        'CRI-O is the lightweight alternative for pure Kubernetes'
+        'Implements CRI (Container Runtime Interface)',
+        'Pulls OCI Images',
+        'Creates Namespaces & Cgroups',
+        'Sandboxing'
       ],
-      flow: 'CRI call → Pull image layers → Create namespaces → Apply cgroups → Start process',
-      scaleNote: '💾 Image pull parallelism defaults to 5. Increase for large clusters.',
+      flow: 'Kubelet -> CRI (gRPC) -> Runtime',
+      scaleNote: '💾 Image pull speeds depend on disk/network.',
       failure: {
-        symptom: 'Pods stuck in ContainerCreating. ImagePullBackOff errors.',
-        impact: 'No new containers on affected node. Existing containers may continue.',
-        check: 'crictl ps; crictl info; systemctl status containerd',
-        recovery: 'Restart containerd. Check disk space, registry connectivity, image pull secrets.'
-      },
-      yamlFields: ['spec.containers[].image', 'spec.containers[].resources', 'spec.containers[].ports']
+        symptom: 'ContainerCreating errors. ImagePullBackOff.',
+        impact: 'Pods fail to start.',
+        check: 'crictl ps',
+        recovery: 'Prune unused images, restart daemon.'
+      }
     }
   };
-
-  // YAML field to component mapping
-  const yamlFieldMapping = {
-    'apiVersion': { component: 'apiserver', desc: 'API Server validates version and routes to correct API group' },
-    'kind': { component: 'apiserver', desc: 'Determines which controller will handle this resource' },
-    'metadata.name': { component: 'etcd', desc: 'Stored as key in etcd: /registry/{kind}/{namespace}/{name}' },
-    'metadata.namespace': { component: 'etcd', desc: 'Partition key - isolates resources logically' },
-    'metadata.labels': { component: 'etcd', desc: 'Indexed for fast label selector queries' },
-    'spec.replicas': { component: 'controller', desc: 'ReplicaSet controller reconciles actual vs desired count' },
-    'spec.selector': { component: 'controller', desc: 'Controller uses this to find pods it owns' },
-    'spec.strategy': { component: 'controller', desc: 'Deployment controller uses for rolling update logic' },
-    'spec.nodeSelector': { component: 'scheduler', desc: 'Hard constraint - filter phase eliminates non-matching nodes' },
-    'spec.affinity': { component: 'scheduler', desc: 'Soft/hard constraints for node and pod placement' },
-    'spec.tolerations': { component: 'scheduler', desc: 'Allows scheduling on tainted nodes' },
-    'spec.containers': { component: 'kubelet', desc: 'Kubelet creates these via CRI calls to runtime' },
-    'spec.containers[].image': { component: 'runtime', desc: 'Runtime pulls from registry, caches layers' },
-    'spec.containers[].resources': { component: 'scheduler', desc: 'Scheduler uses for bin-packing; kubelet enforces via cgroups' },
-    'spec.volumes': { component: 'kubelet', desc: 'Kubelet mounts volumes before starting containers' },
-    'spec.restartPolicy': { component: 'kubelet', desc: 'Kubelet decides whether to restart failed containers' },
-    'spec.ports': { component: 'kubeproxy', desc: 'kube-proxy creates iptables/IPVS rules for Service' },
-    'spec.type': { component: 'kubeproxy', desc: 'Determines ClusterIP/NodePort/LoadBalancer behavior' }
-  };
-
-  const sampleDeploymentYaml = `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nginx-app
-  namespace: production
-  labels:
-    app: nginx
-    tier: frontend
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: nginx
-  strategy:
-    type: RollingUpdate
-  template:
-    spec:
-      nodeSelector:
-        disk: ssd
-      tolerations:
-        - key: "dedicated"
-          value: "frontend"
-      containers:
-        - name: nginx
-          image: nginx:1.21
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-          ports:
-            - containerPort: 80
-      volumes:
-        - name: config
-          configMap:
-            name: nginx-config`;
 
   const flowSteps = [
     { id: 0, label: 'kubectl apply deployment.yaml', active: ['user'], description: 'You submit a Deployment manifest. kubectl serializes to JSON and sends to API server.' },
@@ -551,15 +335,6 @@ spec:
     { id: 7, label: 'Pod becomes Ready', active: ['kubelet', 'kubeproxy'], description: 'Container passes readiness probe. Kubelet updates status. kube-proxy adds Pod to Service endpoints.' }
   ];
 
-  const ingressSteps = [
-    { id: 0, label: 'External Request Arrives', description: 'HTTP request hits cloud load balancer or node IP on port 80/443' },
-    { id: 1, label: 'Ingress Controller Receives', description: 'NGINX/Traefik/etc pod receives traffic, reads Ingress rules from API server' },
-    { id: 2, label: 'Host/Path Matching', description: 'Controller matches request Host header and URL path to Ingress rules' },
-    { id: 3, label: 'Service Resolution', description: 'Ingress routes to backend Service. Controller looks up Endpoints.' },
-    { id: 4, label: 'Pod Selection', description: 'Controller selects a ready Pod IP from Endpoints (load balancing)' },
-    { id: 5, label: 'Direct Pod Connection', description: 'Traffic proxied directly to Pod IP:Port, bypassing kube-proxy' }
-  ];
-
   const schedulerSteps = [
     { label: 'All Nodes', count: 100, description: 'Starting pool of all nodes in cluster', detail: 'Every registered node that is Ready' },
     { label: 'NodeSelector', count: 45, description: 'Filter: node.kubernetes.io/type=compute', detail: 'Hard requirement - must have this label' },
@@ -570,42 +345,39 @@ spec:
     { label: 'Scoring', count: 1, description: 'Score remaining 8: LeastRequestedPriority wins node-7', detail: 'Multiple scoring plugins weighted and summed' }
   ];
 
-  const quizQuestions = {
-    beginner: [
-      { q: "Which component is the only one that communicates directly with etcd?", options: ["kube-scheduler", "kube-apiserver", "kubelet", "kube-controller-manager"], correct: 1 },
-      { q: "If you have 1000 Services, which kube-proxy mode should you use?", options: ["userspace", "iptables", "IPVS", "ebpf-lite"], correct: 2 },
-      { q: "Which is NOT a phase in the Pod lifecycle?", options: ["Pending", "ContainerCreating", "Running", "Compiling"], correct: 3 },
-      { q: "What happens if a Pod lacks a Toleration for a node's Taint?", options: ["Pod warns but schedules", "Pod rejected from that node", "Pod crashes", "Node deletes Pod"], correct: 1 },
-      { q: "Which component talks to the container runtime via CRI?", options: ["kube-proxy", "etcd", "kubelet", "Cloud Controller"], correct: 2 },
-      { q: "Where does an Ingress Controller get its routing rules from?", options: ["ConfigMap only", "API Server (Ingress resources)", "CoreDNS", "kube-proxy"], correct: 1 },
-      { q: "What key format does etcd use to store a Pod named 'web' in namespace 'prod'?", options: ["/pods/prod/web", "/registry/pods/prod/web", "/v1/pods/web", "/api/pods/prod-web"], correct: 1 }
-    ],
-    intermediate: [
-      { q: "What is the primary difference between a DaemonSet and a Deployment?", options: ["DaemonSets use more memory", "DaemonSets run one pod per node", "DaemonSets can't be updated", "DaemonSets are stateful"], correct: 1 },
-      { q: "In a StatefulSet, how are pod names assigned?", options: ["Random UUIDs", "Sequential ordinal indices (0,1,2...)", "By node name", "By creation timestamp"], correct: 1 },
-      { q: "What happens to a StatefulSet's PersistentVolume when the pod is deleted?", options: ["Automatically deleted", "Retained (not deleted)", "Moved to another pod", "Backed up to etcd"], correct: 1 },
-      { q: "Which RBAC resource binds a Role to a user/group within a namespace?", options: ["ClusterRoleBinding", "RoleBinding", "ServiceAccount", "RoleAttachment"], correct: 1 },
-      { q: "What component watches for new Custom Resource Definition (CRD) instances?", options: ["API Server only", "Custom Controller/Operator", "Scheduler", "Kubelet"], correct: 1 },
-      { q: "DaemonSets ignore which scheduler constraint by default?", options: ["Taints", "Node affinity", "Resource limits", "Unschedulable nodes"], correct: 3 },
-      { q: "What field in StatefulSet spec controls the number of pods updated at once?", options: ["maxSurge", "partition", "maxUnavailable", "parallelism"], correct: 1 }
-    ],
-    advanced: [
-      { q: "In RBAC, what is the difference between Role and ClusterRole?", options: ["Roles are deprecated", "Roles are namespaced, ClusterRoles are cluster-wide", "ClusterRoles can't modify resources", "No difference"], correct: 1 },
-      { q: "When creating a CRD, which field defines the API group?", options: ["metadata.group", "spec.group", "apiVersion", "spec.names.group"], correct: 1 },
-      { q: "What is the purpose of a StatefulSet's serviceName field?", options: ["For monitoring", "Creates headless Service for network identity", "Sets pod hostname", "Required but unused"], correct: 1 },
-      { q: "How does a DaemonSet ensure pods run even on nodes with NoSchedule taints?", options: ["It doesn't", "Automatic tolerations for critical DaemonSets", "Bypasses scheduler entirely", "Removes taints temporarily"], correct: 1 },
-      { q: "What does spec.updateStrategy.rollingUpdate.partition do in StatefulSets?", options: ["Limits replicas", "Updates pods with ordinal >= partition value", "Splits pods across zones", "Partitions storage"], correct: 1 },
-      { q: "Which verb in RBAC allows reading secrets?", options: ["read", "get", "list", "watch"], correct: 1 },
-      { q: "What is the purpose of CRD validation schemas (OpenAPI v3)?", options: ["Performance optimization", "Validate custom resource instances before persistence", "Generate documentation", "Enable caching"], correct: 1 },
-      { q: "How do you make a CRD subresource like /status or /scale available?", options: ["They're automatic", "Define in spec.subresources", "Create separate CRD", "Use admission webhooks"], correct: 1 },
-      { q: "What is the finalizer pattern in custom controllers?", options: ["Cleanup hook before resource deletion", "Final update after creation", "End-of-lifecycle logging", "Performance optimization"], correct: 0 },
-      { q: "In StatefulSets, what is the pod management policy 'Parallel' vs 'OrderedReady'?", options: ["No difference", "Parallel creates/deletes pods simultaneously", "Parallel uses more CPU", "OrderedReady is deprecated"], correct: 1 }
-    ]
-  };
+  const quizQuestions = [
+    {
+      q: "Which component is the only one that communicates directly with etcd?",
+      options: ["kube-scheduler", "kube-apiserver", "kubelet", "kube-controller-manager"],
+      correct: 1
+    },
+    {
+      q: "If you have 1000 Services, which kube-proxy mode should you use to avoid performance issues?",
+      options: ["userspace", "iptables", "IPVS", "ebpf-lite"],
+      correct: 2
+    },
+    {
+      q: "Which of the following is NOT a phase in the Pod lifecycle?",
+      options: ["Pending", "ContainerCreating", "Running", "Compiling"],
+      correct: 3
+    },
+    {
+      q: "What happens if a node has a 'Taint' but a Pod does not have a matching 'Toleration'?",
+      options: ["Pod is scheduled but warns", "Pod is rejected from scheduling on that node", "Pod crashes", "Node deletes the Pod"],
+      correct: 1
+    },
+    {
+      q: "Which component runs on every worker node and talks to the container runtime?",
+      options: ["kube-proxy", "etcd", "kubelet", "Cloud Controller Manager"],
+      correct: 2
+    }
+  ];
 
   const troubleshootingScenarios = [
     {
-      id: 'pending', title: 'Pod Stuck in Pending', category: 'scheduling', symptom: 'kubectl get pods shows Pending for minutes',
+      id: 'pending',
+      title: 'Pod Stuck in Pending',
+      symptom: 'kubectl get pods shows Pending for minutes',
       causes: [
         { cause: 'Insufficient resources', check: 'kubectl describe pod - look for "Insufficient cpu/memory"', fix: 'Scale cluster or reduce requests' },
         { cause: 'Node taints blocking', check: 'kubectl describe pod - look for "node(s) had taints"', fix: 'Add tolerations or untaint nodes' },
@@ -614,7 +386,9 @@ spec:
       ]
     },
     {
-      id: 'crashloop', title: 'CrashLoopBackOff', category: 'runtime', symptom: 'Container starts then immediately dies',
+      id: 'crashloop',
+      title: 'CrashLoopBackOff',
+      symptom: 'Container starts then immediately dies',
       causes: [
         { cause: 'Application crash', check: 'kubectl logs <pod> --previous', fix: 'Fix application code, check environment variables' },
         { cause: 'Liveness probe too aggressive', check: 'kubectl describe pod - check probe config', fix: 'Increase initialDelaySeconds, timeoutSeconds' },
@@ -623,38 +397,9 @@ spec:
       ]
     },
     {
-      id: 'imagepull', title: 'ImagePullBackOff', category: 'runtime', symptom: 'Pod stuck in ImagePullBackOff or ErrImagePull',
-      causes: [
-        { cause: 'Image does not exist', check: 'kubectl describe pod - check Events for "not found" or 404', fix: 'Verify image name and tag in registry' },
-        { cause: 'Missing image pull secret', check: 'kubectl describe pod - look for "unauthorized" or 401', fix: 'Create imagePullSecrets and reference in pod spec' },
-        { cause: 'Private registry authentication failed', check: 'kubectl get secret <secret> -o yaml | base64 -d', fix: 'Recreate secret with correct credentials' },
-        { cause: 'Registry unreachable', check: 'kubectl exec -it <pod> -- curl <registry-url>', fix: 'Check network connectivity, firewall rules, DNS' },
-        { cause: 'Rate limit exceeded', check: 'kubectl describe pod - look for "429 Too Many Requests"', fix: 'Use authenticated pulls or mirror to private registry' }
-      ]
-    },
-    {
-      id: 'pvc', title: 'Persistent Volume Issues', category: 'storage', symptom: 'PVC stuck in Pending or Pod cannot mount volume',
-      causes: [
-        { cause: 'No StorageClass available', check: 'kubectl get storageclass', fix: 'Create or configure default StorageClass' },
-        { cause: 'Volume provisioner not running', check: 'kubectl get pods -n kube-system | grep <provisioner>', fix: 'Deploy or restart storage provisioner' },
-        { cause: 'Insufficient storage capacity', check: 'kubectl describe pvc - check Events for capacity errors', fix: 'Increase storage quota or use smaller PVC' },
-        { cause: 'Access mode mismatch', check: 'kubectl describe pv - compare accessModes with PVC', fix: 'Match ReadWriteOnce/ReadWriteMany between PV and PVC' },
-        { cause: 'Volume already mounted elsewhere', check: 'kubectl get pods -A -o wide | grep <volume>', fix: 'Delete pod holding volume or use ReadWriteMany' },
-        { cause: 'Node selector conflicts', check: 'kubectl describe pv - check nodeAffinity', fix: 'Ensure pod can schedule on nodes with PV affinity' }
-      ]
-    },
-    {
-      id: 'quota', title: 'Resource Quota Exceeded', category: 'resources', symptom: 'Pod creation fails with "exceeded quota" error',
-      causes: [
-        { cause: 'CPU quota exceeded', check: 'kubectl describe resourcequota -n <namespace>', fix: 'Reduce resource requests or increase quota limits' },
-        { cause: 'Memory quota exceeded', check: 'kubectl get resourcequota -n <namespace> -o yaml', fix: 'Scale down deployments or request quota increase' },
-        { cause: 'Pod count limit reached', check: 'kubectl describe quota - check pods used vs hard limit', fix: 'Delete unused pods or increase pod count quota' },
-        { cause: 'Storage quota exceeded', check: 'kubectl describe resourcequota - check persistentvolumeclaims', fix: 'Delete unused PVCs or request storage increase' },
-        { cause: 'Missing resource requests', check: 'kubectl describe pod - verify requests/limits defined', fix: 'Add resource requests to pod spec (required with quotas)' }
-      ]
-    },
-    {
-      id: 'service', title: 'Service Unreachable', category: 'networking', symptom: 'curl to ClusterIP times out',
+      id: 'service',
+      title: 'Service Unreachable',
+      symptom: 'curl to ClusterIP times out',
       causes: [
         { cause: 'No endpoints', check: 'kubectl get endpoints <svc> - empty?', fix: 'Check pod labels match service selector' },
         { cause: 'Pods not ready', check: 'kubectl get pods - all Running but not Ready?', fix: 'Fix readiness probe failures' },
@@ -663,7 +408,9 @@ spec:
       ]
     },
     {
-      id: 'dns', title: 'DNS Resolution Failing', category: 'networking', symptom: 'nslookup kubernetes.default fails from pod',
+      id: 'dns',
+      title: 'DNS Resolution Failing',
+      symptom: 'nslookup kubernetes.default fails from pod',
       causes: [
         { cause: 'CoreDNS down', check: 'kubectl get pods -n kube-system -l k8s-app=kube-dns', fix: 'Restart CoreDNS, check logs' },
         { cause: 'resolv.conf wrong', check: 'kubectl exec <pod> -- cat /etc/resolv.conf', fix: 'Check kubelet DNS config, dnsPolicy' },
@@ -675,33 +422,18 @@ spec:
 
   const handleQuizAnswer = (index) => {
     setSelectedAnswer(index);
-    const questions = quizQuestions[quizDifficulty];
-    if (index === questions[currentQuestion].correct) {
+    if (index === quizQuestions[currentQuestion].correct) {
       setQuizScore(s => s + 1);
     }
+    
     setTimeout(() => {
       setSelectedAnswer(null);
-      if (currentQuestion < questions.length - 1) {
+      if (currentQuestion < quizQuestions.length - 1) {
         setCurrentQuestion(q => q + 1);
       } else {
         setShowQuizResult(true);
-        saveQuizResult();
       }
     }, 1500);
-  };
-
-  const saveQuizResult = () => {
-    const questions = quizQuestions[quizDifficulty];
-    const result = {
-      date: new Date().toISOString(),
-      difficulty: quizDifficulty,
-      score: quizScore + (selectedAnswer === questions[currentQuestion].correct ? 1 : 0),
-      total: questions.length,
-      percentage: Math.round(((quizScore + (selectedAnswer === questions[currentQuestion].correct ? 1 : 0)) / questions.length) * 100)
-    };
-    const newHistory = [result, ...quizHistory].slice(0, 10);
-    setQuizHistory(newHistory);
-    localStorage.setItem('k8s-quiz-history', JSON.stringify(newHistory));
   };
 
   const restartQuiz = () => {
@@ -711,59 +443,13 @@ spec:
     setSelectedAnswer(null);
   };
 
-  const changeDifficulty = (difficulty) => {
-    setQuizDifficulty(difficulty);
-    restartQuiz();
-  };
-
-  // Reusable SVG Arrow component with unique marker IDs
-  const Arrow = ({ id, x1, y1, x2, y2, isActive, curved = false, showPacket = false }) => {
-    const uniqueId = useId();
-    const markerId = `arrow-${id}-${isActive ? 'on' : 'off'}-${uniqueId}`.replace(/:/g, '-');
-    const path = curved 
-      ? `M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - 30} ${x2} ${y2}`
-      : `M ${x1} ${y1} L ${x2} ${y2}`;
-    
-    return (
-      <g>
-        <defs>
-          <marker id={markerId} markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill={isActive ? '#22c55e' : '#475569'} />
-          </marker>
-        </defs>
-        <path
-          d={path}
-          fill="none"
-          stroke={isActive ? '#22c55e' : '#475569'}
-          strokeWidth={isActive ? 2.5 : 1.5}
-          markerEnd={`url(#${markerId})`}
-          strokeDasharray={isActive ? '6 3' : 'none'}
-          className={isActive ? 'animate-pulse' : ''}
-        />
-        {showPacket && isActive && (
-          <circle r={6} fill="#22c55e" opacity="0.9">
-            <animateMotion dur="1.2s" repeatCount="indefinite" path={path} />
-          </circle>
-        )}
-      </g>
-    );
-  };
-
-  // Architecture Component Box
-  const Component = ({ id, label, x, y, type = 'control', onClick, isActive, isFailed, showScale, isYamlHighlight }) => (
+  const Component = ({ id, label, x, y, type = 'control', onClick, isActive, isFailed, showScale }) => (
     <g 
       onClick={() => onClick(id)} 
       style={{ cursor: 'pointer' }}
+      className="transition-all duration-300"
       role="button"
-      tabIndex={0}
-      aria-label={`${label} component${isActive ? ', selected' : ''}${isFailed ? ', failed' : ''}${isYamlHighlight ? ', highlighted' : ''}`}
-      aria-pressed={isActive || isYamlHighlight}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick(id);
-        }
-      }}
+      aria-label={`${label} component`}
     >
       <rect
         x={x}
@@ -771,27 +457,31 @@ spec:
         width={120}
         height={50}
         rx={6}
-        fill={isFailed ? '#991b1b' : isYamlHighlight ? '#7c3aed' : isActive ? (type === 'control' ? '#3b82f6' : '#10b981') : (type === 'control' ? '#1e3a5f' : '#134e3a')}
-        stroke={isFailed ? '#ef4444' : isYamlHighlight ? '#a78bfa' : isActive ? '#fff' : (type === 'control' ? '#3b82f6' : '#10b981')}
-        strokeWidth={isFailed || isYamlHighlight ? 3 : isActive ? 2.5 : 1.5}
+        fill={isFailed ? '#991b1b' : isActive ? (type === 'control' ? '#3b82f6' : '#10b981') : (type === 'control' ? '#1e3a5f' : '#134e3a')}
+        stroke={isFailed ? '#ef4444' : isActive ? '#fff' : (type === 'control' ? '#3b82f6' : '#10b981')}
+        strokeWidth={isFailed ? 4 : isActive ? 3 : 2}
         className="transition-all duration-300"
       />
-      <text x={x + 60} y={y + 30} textAnchor="middle" fill="#fff" fontSize={11} fontWeight={600}>
+      <text
+        x={x + 60}
+        y={y + 30}
+        textAnchor="middle"
+        fill="#fff"
+        fontSize={11}
+        fontWeight={600}
+      >
         {label}
       </text>
-      {isActive && !isFailed && !isYamlHighlight && (
-        <circle cx={x + 110} cy={y + 10} r={5} fill="#22c55e" className="animate-pulse" />
-      )}
-      {isYamlHighlight && (
-        <circle cx={x + 110} cy={y + 10} r={5} fill="#a78bfa" className="animate-pulse" />
+      {isActive && !isFailed && (
+        <circle cx={x + 110} cy={y + 10} r={6} fill="#22c55e" className="animate-pulse" />
       )}
       {isFailed && (
-        <text x={x + 110} y={y + 15} fill="#ef4444" fontSize={14} fontWeight="bold">✕</text>
+        <text x={x + 110} y={y + 15} fill="#ef4444" fontSize={16} fontWeight="bold">✕</text>
       )}
       {showScale && componentDetails[id]?.scaleNote && (
         <g>
-          <rect x={x - 5} y={y - 20} width={130} height={16} rx={3} fill="#0f172a" stroke="#475569" strokeWidth={1} />
-          <text x={x + 60} y={y - 8} textAnchor="middle" fill="#fbbf24" fontSize={7}>
+          <rect x={x - 5} y={y - 22} width={130} height={18} rx={4} fill="#0f172a" stroke="#475569" />
+          <text x={x + 60} y={y - 9} textAnchor="middle" fill="#fbbf24" fontSize={7}>
             {componentDetails[id].scaleNote.substring(0, 35)}
           </text>
         </g>
@@ -799,1020 +489,720 @@ spec:
     </g>
   );
 
+  const Arrow = ({ x1, y1, x2, y2, isActive, isVisited, curved = false, showPacket = false }) => {
+    let path;
+    if (curved) {
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+      if (Math.abs(x1 - x2) > Math.abs(y1 - y2)) {
+         path = `M ${x1} ${y1} Q ${midX} ${y1 - 40} ${x2} ${y2}`;
+      } else {
+         path = `M ${x1} ${y1} Q ${x1 - 40} ${midY} ${x2} ${y2}`;
+      }
+    } else {
+      path = `M ${x1} ${y1} L ${x2} ${y2}`;
+    }
+    
+    const strokeColor = isActive ? '#22c55e' : (isVisited ? '#10b981' : '#475569');
+    
+    return (
+      <g>
+        <defs>
+          <marker id={`arrowhead-${isActive ? 'active' : (isVisited ? 'visited' : 'inactive')}`} markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill={strokeColor} />
+          </marker>
+        </defs>
+        <path
+          d={path}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={isActive ? 3 : 2}
+          markerEnd={`url(#arrowhead-${isActive ? 'active' : (isVisited ? 'visited' : 'inactive')})`}
+          strokeDasharray={isActive || isVisited ? 'none' : '8 4'}
+          className={isActive ? 'animate-pulse' : ''}
+        />
+        {showPacket && (
+          <circle r={7} fill="#22c55e" opacity="0.9">
+            <animateMotion dur="2s" repeatCount="indefinite" path={path} />
+          </circle>
+        )}
+      </g>
+    );
+  };
+
+  // Traffic Simulation Packet
+  const TrafficPacket = () => (
+    <circle r={8} fill="#f43f5e" stroke="#fff" strokeWidth={2}>
+      <animateMotion 
+        dur="4s" 
+        repeatCount="1" 
+        path="M 70 155 L 110 120 L 280 70 L 440 70 L 110 120 L 110 280 L 280 305 Q 527 200 775 305"
+      />
+    </circle>
+  );
+
   const views = [
     { id: 'architecture', label: 'Architecture', key: '1' },
     { id: 'flow', label: 'Flow', key: '2' },
     { id: 'scheduler', label: 'Scheduler', key: '3' },
     { id: 'networking', label: 'Networking', key: '4' },
-    { id: 'ingress', label: 'Ingress', key: '5' },
-    { id: 'troubleshooting', label: 'Troubleshoot', key: '6' },
-    { id: 'quiz', label: 'Quiz', key: '7' }
+    { id: 'troubleshooting', label: 'Troubleshoot', key: '5' },
+    { id: 'quiz', label: 'Knowledge Check', key: '6' }
   ];
-
-  // Get highlighted component from YAML field selection
-  const yamlHighlightedComponent = selectedYamlField ? yamlFieldMapping[selectedYamlField]?.component : null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white" style={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
-        .yaml-line:hover { background: rgba(124, 58, 237, 0.2); cursor: pointer; }
-        .yaml-highlight { background: rgba(124, 58, 237, 0.3); border-left: 3px solid #a78bfa; }
       `}</style>
       
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-2 sm:py-3">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-3">
+      <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-base sm:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+              <h1 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
                 Kubernetes Internals
               </h1>
-              <p className="text-slate-500 text-[10px] sm:text-xs mt-0.5">Interactive Architecture Deep Dive</p>
+              <p className="text-slate-500 text-xs md:text-sm mt-1">Interactive Architecture Deep Dive</p>
             </div>
-            <nav aria-label="Main navigation" className="flex flex-wrap gap-1 sm:gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {views.map(view => (
                 <button
                   key={view.id}
                   onClick={() => {setActiveView(view.id); resetAll();}}
-                  className={`px-2 sm:px-2.5 md:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium transition-all ${
+                  className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
                     activeView === view.id 
                       ? 'bg-blue-600 text-white' 
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                   }`}
-                  aria-label={`${view.label} view, press ${view.key}`}
-                  aria-current={activeView === view.id ? 'page' : undefined}
                   title={`Press ${view.key}`}
                 >
                   {view.label}
-                  <span className="ml-0.5 sm:ml-1 text-slate-500 text-[9px] sm:text-[10px] hidden sm:inline" aria-hidden="true">{view.key}</span>
+                  <span className="ml-1 text-slate-500 text-xs">{view.key}</span>
                 </button>
               ))}
-            </nav>
+            </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
         
-        {/* ==================== ARCHITECTURE VIEW ==================== */}
+        {/* Architecture View */}
         {activeView === 'architecture' && (
-          <main role="main" aria-label="Architecture view">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
-            <div className="xl:col-span-2">
-              <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto relative">
-                {/* Controls Row */}
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
-                  <h2 className="text-xs sm:text-sm font-semibold text-slate-300">Click component →</h2>
-                  <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
-                    <input 
-                      type="checkbox" 
-                      checked={showScaleNotes} 
-                      onChange={e => setShowScaleNotes(e.target.checked)} 
-                      className="rounded bg-slate-700 border-slate-600 text-blue-500 w-3 h-3" 
-                      aria-label="Show scale notes"
-                    />
-                    <span className="text-slate-400">Scale</span>
-                  </label>
-                  <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
-                    <input 
-                      type="checkbox" 
-                      checked={failureMode} 
-                      onChange={e => {setFailureMode(e.target.checked); setFailedComponent(null); setSelectedComponent(null);}} 
-                      className="rounded bg-slate-700 border-slate-600 text-red-500 w-3 h-3" 
-                      aria-label="Enable failure mode"
-                    />
-                    <span className="text-red-400">Failure</span>
-                  </label>
-                  <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
-                    <input 
-                      type="checkbox" 
-                      checked={showYamlPanel} 
-                      onChange={e => {setShowYamlPanel(e.target.checked); setSelectedYamlField(null);}} 
-                      className="rounded bg-slate-700 border-slate-600 text-purple-500 w-3 h-3" 
-                      aria-label="Show YAML mapping panel"
-                    />
-                    <span className="text-purple-400">YAML Map</span>
-                  </label>
-                  <button
-                    onClick={() => setTrafficSimulation(true)}
-                    disabled={trafficSimulation}
-                    className="ml-auto px-2 sm:px-2.5 py-1 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-700 text-[10px] sm:text-xs font-medium rounded transition-all"
-                    aria-label="Simulate traffic flow"
-                    aria-busy={trafficSimulation}
-                  >
-                    {trafficSimulation ? 'Tracing...' : '🚀 Trace Deployment'}
-                  </button>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="lg:col-span-2">
+              <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 md:p-6 overflow-x-auto relative">
+                
+                {/* Controls and Legend Row */}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <h2 className="text-sm md:text-base font-semibold text-slate-300">Click any component →</h2>
+                    <p className="text-xs text-slate-500 mt-1">Explore the internals of the Control Plane & Workers</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none hover:bg-slate-800 p-1.5 rounded transition-colors bg-slate-800/50">
+                      <input 
+                        type="checkbox" 
+                        checked={showScaleNotes} 
+                        onChange={e => setShowScaleNotes(e.target.checked)}
+                        className="rounded bg-slate-700 border-slate-600 text-blue-500"
+                      />
+                      <span className="text-slate-400">Scale notes</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none hover:bg-slate-800 p-1.5 rounded transition-colors bg-slate-800/50">
+                      <input 
+                        type="checkbox" 
+                        checked={failureMode} 
+                        onChange={e => {setFailureMode(e.target.checked); setFailedComponent(null); setSelectedComponent(null);}}
+                        className="rounded bg-slate-700 border-slate-600 text-red-500"
+                      />
+                      <span className="text-red-400">Failure mode</span>
+                    </label>
+                    <button
+                      onClick={() => setTrafficSimulation(true)}
+                      disabled={trafficSimulation}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-700 text-xs font-bold rounded shadow-lg transition-all flex items-center gap-2"
+                      title="Visualizes a deployment request flow"
+                    >
+                      {trafficSimulation ? 'Tracing...' : '🚀 Trace Deployment'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Simulation Status Banner */}
-                {trafficSimulation && simulationStatus && (
-                  <div className="absolute top-16 right-4 bg-rose-900/90 border border-rose-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-xl animate-pulse z-20">
+                {trafficSimulation && (
+                  <div className="absolute top-20 right-6 bg-rose-900/90 border border-rose-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-xl animate-pulse z-20">
                     {simulationStatus}
                   </div>
                 )}
 
+                {/* Inline Legend */}
+                <div className="flex items-center gap-4 text-xs mb-4 justify-end">
+                   <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-600 rounded border border-blue-400"></div> Control Plane</div>
+                   <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-600 rounded border border-emerald-400"></div> Worker Node</div>
+                </div>
+
                 {failureMode && (
-                  <div className="mb-3 p-2 bg-red-950/50 border border-red-900 rounded text-[10px] sm:text-xs text-red-300">
-                    💀 Click a component to see failure impact
+                  <div className="mb-4 p-3 bg-red-950/50 border border-red-800 rounded-lg text-xs text-red-300">
+                    💀 Click a component to see what breaks when it fails
                   </div>
                 )}
 
-                {/* Architecture SVG - FIXED ARROW ALIGNMENT */}
-                <div className="min-w-[640px] lg:min-w-0">
-                  <svg viewBox="0 0 680 400" className="w-full h-auto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Kubernetes architecture diagram showing control plane and worker node components">
+                <div className="min-w-[900px]">
+                  <svg viewBox="0 0 900 460" className="w-full h-auto">
                     {/* Control Plane Box */}
-                    <rect x={15} y={15} width={650} height={160} rx={10} fill="none" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="6 3" />
-                    <text x={30} y={38} fill="#3b82f6" fontSize={12} fontWeight={700}>CONTROL PLANE</text>
+                    <rect x={20} y={20} width={860} height={170} rx={12} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="8 4" />
+                    <text x={40} y={50} fill="#3b82f6" fontSize={14} fontWeight={700}>CONTROL PLANE (The Brain)</text>
                     
-                    {/* Components - Control Plane */}
-                    <Component id="apiserver" label="API Server" x={40} y={60} 
+                    {/* CP Components: WIDER SPREAD */}
+                    <Component 
+                      id="apiserver" label="API Server" x={50} y={70} 
                       onClick={failureMode ? setFailedComponent : setSelectedComponent} 
                       isActive={selectedComponent === 'apiserver'} 
                       isFailed={failedComponent === 'apiserver'}
-                      isYamlHighlight={yamlHighlightedComponent === 'apiserver'}
-                      showScale={showScaleNotes} />
-                    <Component id="etcd" label="etcd" x={190} y={60} 
+                      showScale={showScaleNotes}
+                    />
+                    <Component 
+                      id="etcd" label="etcd" x={250} y={70} 
                       onClick={failureMode ? setFailedComponent : setSelectedComponent} 
                       isActive={selectedComponent === 'etcd'}
                       isFailed={failedComponent === 'etcd'}
-                      isYamlHighlight={yamlHighlightedComponent === 'etcd'}
-                      showScale={showScaleNotes} />
-                    <Component id="scheduler" label="Scheduler" x={340} y={60} 
+                      showScale={showScaleNotes}
+                    />
+                    <Component 
+                      id="scheduler" label="Scheduler" x={450} y={70} 
                       onClick={failureMode ? setFailedComponent : setSelectedComponent} 
                       isActive={selectedComponent === 'scheduler'}
                       isFailed={failedComponent === 'scheduler'}
-                      isYamlHighlight={yamlHighlightedComponent === 'scheduler'}
-                      showScale={showScaleNotes} />
-                    <Component id="controller" label="Controllers" x={490} y={60} 
+                      showScale={showScaleNotes}
+                    />
+                    <Component 
+                      id="controller" label="Controllers" x={650} y={70} 
                       onClick={failureMode ? setFailedComponent : setSelectedComponent} 
                       isActive={selectedComponent === 'controller'}
                       isFailed={failedComponent === 'controller'}
-                      isYamlHighlight={yamlHighlightedComponent === 'controller'}
-                      showScale={showScaleNotes} />
-                    
-                    {/* Control Plane Arrows - FIXED */}
-                    <Arrow id="api-etcd" x1={160} y1={85} x2={188} y2={85} />
-                    <Arrow id="api-sched" x1={100} y1={112} x2={340} y2={85} curved />
-                    <Arrow id="api-ctrl" x1={100} y1={115} x2={490} y2={85} curved />
+                      showScale={showScaleNotes}
+                    />
                     
                     {/* Worker Node Box */}
-                    <rect x={15} y={210} width={650} height={175} rx={10} fill="none" stroke="#10b981" strokeWidth={1.5} strokeDasharray="6 3" />
-                    <text x={30} y={233} fill="#10b981" fontSize={12} fontWeight={700}>WORKER NODE</text>
+                    <rect x={20} y={230} width={860} height={170} rx={12} fill="none" stroke="#10b981" strokeWidth={2} strokeDasharray="8 4" />
+                    <text x={40} y={260} fill="#10b981" fontSize={14} fontWeight={700}>WORKER NODE (The Muscle)</text>
                     
-                    {/* Components - Worker Node */}
-                    <Component id="kubelet" label="kubelet" x={40} y={255} type="worker" 
+                    {/* Worker Components: Kubelet -> Runtime -> Proxy */}
+                    <Component 
+                      id="kubelet" label="kubelet" x={50} y={280} type="worker" 
                       onClick={failureMode ? setFailedComponent : setSelectedComponent} 
                       isActive={selectedComponent === 'kubelet'}
                       isFailed={failedComponent === 'kubelet'}
-                      isYamlHighlight={yamlHighlightedComponent === 'kubelet'}
-                      showScale={showScaleNotes} />
-                    <Component id="kubeproxy" label="kube-proxy" x={190} y={255} type="worker" 
-                      onClick={failureMode ? setFailedComponent : setSelectedComponent} 
-                      isActive={selectedComponent === 'kubeproxy'}
-                      isFailed={failedComponent === 'kubeproxy'}
-                      isYamlHighlight={yamlHighlightedComponent === 'kubeproxy'}
-                      showScale={showScaleNotes} />
-                    <Component id="runtime" label="containerd" x={340} y={255} type="worker" 
+                      showScale={showScaleNotes}
+                    />
+                    <Component 
+                      id="runtime" label="containerd" x={250} y={280} type="worker" 
                       onClick={failureMode ? setFailedComponent : setSelectedComponent} 
                       isActive={selectedComponent === 'runtime'}
                       isFailed={failedComponent === 'runtime'}
-                      isYamlHighlight={yamlHighlightedComponent === 'runtime'}
-                      showScale={showScaleNotes} />
+                      showScale={showScaleNotes}
+                    />
+                    <Component 
+                      id="kubeproxy" label="kube-proxy" x={450} y={280} type="worker" 
+                      onClick={failureMode ? setFailedComponent : setSelectedComponent} 
+                      isActive={selectedComponent === 'kubeproxy'}
+                      isFailed={failedComponent === 'kubeproxy'}
+                      showScale={showScaleNotes}
+                    />
                     
-                    {/* Pods Box */}
-                    <rect x={490} y={248} width={145} height={75} rx={6} fill="#1e293b" stroke="#475569" strokeWidth={1} />
-                    <text x={562} y={268} textAnchor="middle" fill="#94a3b8" fontSize={9}>PODS</text>
-                    <rect x={505} y={278} width={32} height={32} rx={4} fill="#0f172a" stroke="#10b981" strokeWidth={1} />
-                    <rect x={545} y={278} width={32} height={32} rx={4} fill="#0f172a" stroke="#10b981" strokeWidth={1} />
-                    <rect x={585} y={278} width={32} height={32} rx={4} fill="#0f172a" stroke="#10b981" strokeWidth={1} />
+                    {/* Pods Representation (Far Right) */}
+                    <rect x={700} y={270} width={150} height={80} rx={8} fill="#1e293b" stroke="#475569" strokeWidth={1} />
+                    <text x={775} y={295} textAnchor="middle" fill="#94a3b8" fontSize={10}>PODS</text>
+                    <rect x={715} y={305} width={35} height={35} rx={4} fill="#0f172a" stroke="#10b981" />
+                    <rect x={757} y={305} width={35} height={35} rx={4} fill="#0f172a" stroke="#10b981" />
+                    <rect x={799} y={305} width={35} height={35} rx={4} fill="#0f172a" stroke="#10b981" />
                     
-                    {/* Cross-plane Arrows - FIXED */}
-                    <Arrow id="api-kubelet" x1={100} y1={175} x2={100} y2={253} />
-                    <Arrow id="api-proxy" x1={250} y1={175} x2={250} y2={253} />
-                    <Arrow id="kubelet-runtime" x1={160} y1={280} x2={338} y2={280} />
-                    <Arrow id="runtime-pods" x1={460} y1={294} x2={488} y2={294} />
+                    {/* ARROWS: Updated for WIDER positions */}
+                    
+                    {/* API(110,95) <-> Etcd(250,95) */}
+                    <Arrow x1={170} y1={95} x2={250} y2={95} /> 
+                    
+                    {/* API(110,120) <-> Scheduler(510,120) - Bus style line across bottom of CP */}
+                    <path d="M 110 120 L 110 150 L 510 150 L 510 120" fill="none" stroke="#475569" strokeWidth="2" strokeDasharray="4 4" />
+                    
+                    {/* API(110,120) <-> Controller(710,120) */}
+                    <path d="M 110 120 L 110 160 L 710 160 L 710 120" fill="none" stroke="#475569" strokeWidth="2" strokeDasharray="4 4" />
 
-                    {/* Traffic Simulation Packet */}
-                    {trafficSimulation && (
-                      <circle r={7} fill="#f43f5e" stroke="#fff" strokeWidth={2}>
-                        <animateMotion dur="2.5s" repeatCount="1" path="M 60 180 L 100 85 L 560 294" />
-                      </circle>
-                    )}
+                    {/* API(110,120) <-> Kubelet(110,280) - Vertical Spine */}
+                    <Arrow x1={110} y1={120} x2={110} y2={280} />
+                    
+                    {/* API(110,120) <-> Proxy(510,280) - Diagonal/Curved */}
+                    <path d="M 110 200 L 510 200 L 510 280" fill="none" stroke="#475569" strokeWidth="2" strokeDasharray="4 4" />
+
+                    {/* Kubelet(170,305) -> Runtime(250,305) - Direct */}
+                    <Arrow x1={170} y1={305} x2={250} y2={305} />
+                    
+                    {/* Runtime(370,305) -> Pods(700,305) - Jump over Proxy */}
+                    <path d="M 370 305 Q 535 180 700 305" fill="none" stroke="#10b981" strokeWidth="2" markerEnd="url(#arrowhead-inactive)" />
+
+                    {/* Simulation Packet */}
+                    {trafficSimulation && <TrafficPacket />}
                   </svg>
                 </div>
-                <p className="text-[10px] text-slate-600 mt-2 text-center">Esc to clear • Click components for details</p>
+                <p className="text-xs text-slate-600 mt-4 text-center">Press Esc to clear selection</p>
               </div>
-
-              {/* YAML Mapping Panel */}
-              {showYamlPanel && (
-                <div className="mt-3 sm:mt-4 bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 mb-3">
-                    <h3 className="text-xs sm:text-sm font-bold text-purple-400">YAML → Component Mapping</h3>
-                    <span className="text-[10px] sm:text-xs text-slate-500">Click a field to highlight which component handles it</span>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="bg-slate-950 rounded-lg p-2 sm:p-3 font-mono text-[10px] sm:text-xs overflow-x-auto">
-                      <pre className="text-slate-300 leading-relaxed">
-                        {sampleDeploymentYaml.split('\n').map((line, i) => {
-                          // Extract field name from line
-                          const fieldMatch = line.match(/^(\s*)(\w+[\w[].]*):/) || line.match(/^(\s*)- (\w+):/);
-                          let fieldKey = null;
-                          if (fieldMatch) {
-                            const indent = fieldMatch[1].length;
-                            const field = fieldMatch[2];
-                            // Map to our field keys
-                            if (indent === 0 && ['apiVersion', 'kind'].includes(field)) fieldKey = field;
-                            if (indent === 2 && field === 'name') fieldKey = 'metadata.name';
-                            if (indent === 2 && field === 'namespace') fieldKey = 'metadata.namespace';
-                            if (indent === 2 && field === 'labels') fieldKey = 'metadata.labels';
-                            if (indent === 2 && field === 'replicas') fieldKey = 'spec.replicas';
-                            if (indent === 2 && field === 'selector') fieldKey = 'spec.selector';
-                            if (indent === 2 && field === 'strategy') fieldKey = 'spec.strategy';
-                            if (field === 'nodeSelector') fieldKey = 'spec.nodeSelector';
-                            if (field === 'tolerations') fieldKey = 'spec.tolerations';
-                            if (field === 'containers') fieldKey = 'spec.containers';
-                            if (field === 'image') fieldKey = 'spec.containers[].image';
-                            if (field === 'resources') fieldKey = 'spec.containers[].resources';
-                            if (field === 'volumes') fieldKey = 'spec.volumes';
-                          }
-                          
-                          return (
-                            <div 
-                              key={i} 
-                              className={`yaml-line px-1 -mx-1 rounded ${selectedYamlField === fieldKey ? 'yaml-highlight' : ''} ${fieldKey ? '' : 'opacity-60'}`}
-                              onClick={() => fieldKey && setSelectedYamlField(fieldKey === selectedYamlField ? null : fieldKey)}
-                              role={fieldKey ? 'button' : undefined}
-                              tabIndex={fieldKey ? 0 : undefined}
-                              aria-label={fieldKey ? `YAML field ${fieldKey}, handled by ${componentDetails[yamlFieldMapping[fieldKey]?.component]?.name}` : undefined}
-                              aria-pressed={fieldKey && selectedYamlField === fieldKey}
-                              onKeyDown={fieldKey ? (e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  setSelectedYamlField(fieldKey === selectedYamlField ? null : fieldKey);
-                                }
-                              } : undefined}
-                            >
-                              {line || ' '}
-                            </div>
-                          );
-                        })}
-                      </pre>
-                    </div>
-                    <div>
-                      {selectedYamlField ? (
-                        <div className="bg-purple-950/30 border border-purple-800 rounded-lg p-3 sm:p-4">
-                          <div className="text-[10px] sm:text-xs text-purple-400 uppercase tracking-wider mb-1">Field</div>
-                          <div className="font-mono text-sm sm:text-base text-white mb-2 sm:mb-3">{selectedYamlField}</div>
-                          <div className="text-[10px] sm:text-xs text-purple-400 uppercase tracking-wider mb-1">Handled By</div>
-                          <div className="text-emerald-400 text-sm sm:text-base font-semibold mb-2 sm:mb-3">{componentDetails[yamlFieldMapping[selectedYamlField]?.component]?.name}</div>
-                          <div className="text-[10px] sm:text-xs text-purple-400 uppercase tracking-wider mb-1">How</div>
-                          <div className="text-slate-300 text-xs sm:text-sm">{yamlFieldMapping[selectedYamlField]?.desc}</div>
-                        </div>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-slate-500 text-xs sm:text-sm">
-                          ← Click a highlighted YAML field
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
             
             {/* Detail Panel */}
-            <div className="xl:col-span-1">
+            <div className="lg:col-span-1">
               {failedComponent && failureMode ? (
-                <div className="bg-red-950/30 rounded-xl border border-red-800 p-3 sm:p-4 xl:sticky xl:top-20">
-                  <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                    <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-red-500 animate-pulse" />
-                    <h3 className="text-sm sm:text-base font-bold text-red-400">{componentDetails[failedComponent].name} FAILURE</h3>
+                <div className="bg-red-950/30 rounded-xl border border-red-800 p-5 sticky top-24">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                    <h3 className="text-lg font-bold text-red-400">{componentDetails[failedComponent].name} FAILURE</h3>
                   </div>
-                  <div className="space-y-2 sm:space-y-2.5">
-                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
-                      <div className="text-[9px] sm:text-[10px] text-red-400 uppercase tracking-wider mb-0.5">Symptom</div>
-                      <p className="text-white text-xs sm:text-sm font-medium">{componentDetails[failedComponent].failure.symptom}</p>
+                  
+                  <div className="space-y-3">
+                    <div className="bg-slate-900 rounded-lg p-3">
+                      <div className="text-xs text-red-400 uppercase tracking-wider mb-1">Symptom</div>
+                      <p className="text-white text-sm font-semibold">{componentDetails[failedComponent].failure.symptom}</p>
                     </div>
-                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
-                      <div className="text-[9px] sm:text-[10px] text-orange-400 uppercase tracking-wider mb-0.5">Impact</div>
-                      <p className="text-slate-300 text-[10px] sm:text-xs">{componentDetails[failedComponent].failure.impact}</p>
+                    
+                    <div className="bg-slate-900 rounded-lg p-3">
+                      <div className="text-xs text-orange-400 uppercase tracking-wider mb-1">Impact</div>
+                      <p className="text-slate-300 text-sm">{componentDetails[failedComponent].failure.impact}</p>
                     </div>
-                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
-                      <div className="text-[9px] sm:text-[10px] text-blue-400 uppercase tracking-wider mb-0.5">Diagnostic</div>
-                      <code className="text-[9px] sm:text-[10px] text-emerald-400 block bg-slate-800 p-1.5 rounded font-mono break-all">{componentDetails[failedComponent].failure.check}</code>
+                    
+                    <div className="bg-slate-900 rounded-lg p-3">
+                      <div className="text-xs text-blue-400 uppercase tracking-wider mb-1">Diagnostic</div>
+                      <code className="text-xs text-emerald-400 block bg-slate-800 p-2 rounded font-mono break-all">
+                        {componentDetails[failedComponent].failure.check}
+                      </code>
                     </div>
-                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
-                      <div className="text-[9px] sm:text-[10px] text-emerald-400 uppercase tracking-wider mb-0.5">Recovery</div>
-                      <p className="text-slate-300 text-[10px] sm:text-xs">{componentDetails[failedComponent].failure.recovery}</p>
+                    
+                    <div className="bg-slate-900 rounded-lg p-3">
+                      <div className="text-xs text-emerald-400 uppercase tracking-wider mb-1">Recovery</div>
+                      <p className="text-slate-300 text-sm">{componentDetails[failedComponent].failure.recovery}</p>
                     </div>
                   </div>
                 </div>
               ) : selectedComponent ? (
-                <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 xl:sticky xl:top-20">
-                  <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                    <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <h3 className="text-sm sm:text-base font-bold text-white">{componentDetails[selectedComponent].name}</h3>
+                <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 sticky top-24">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+                    <h3 className="text-lg font-bold text-white">{componentDetails[selectedComponent].name}</h3>
                   </div>
-                  <div className="text-emerald-400 text-[10px] sm:text-xs font-semibold mb-2">{componentDetails[selectedComponent].role}</div>
+                  <div className="text-emerald-400 text-sm font-semibold mb-3">{componentDetails[selectedComponent].role}</div>
                   
-                  <div className="bg-slate-800 rounded-lg p-2 sm:p-2.5 mb-2 sm:mb-3">
-                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1">Analogy</div>
-                    <p className="text-slate-300 text-[10px] sm:text-xs leading-relaxed">{componentDetails[selectedComponent].analogy}</p>
+                  <div className="bg-slate-800 rounded-lg p-3 mb-4">
+                    <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Analogy</div>
+                    <p className="text-slate-300 text-sm leading-relaxed">{componentDetails[selectedComponent].analogy}</p>
                   </div>
 
+                  {/* AI Button */}
+                  <button 
+                    onClick={handleAiComponentQuery}
+                    disabled={isAiLoading}
+                    className="w-full mb-4 py-2 px-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 rounded-lg font-bold text-sm text-white shadow-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    {isAiLoading ? 'Thinking...' : '✨ Explain Internals (AI)'}
+                  </button>
+
+                  {/* AI Response Area */}
+                  {aiResponse && !aiError && (
+                    <div className="mb-4 p-3 bg-indigo-950/30 border border-indigo-500/30 rounded-lg animate-in fade-in slide-in-from-top-2">
+                      <div className="text-xs text-indigo-400 font-bold mb-1">AI ARCHITECT</div>
+                      <p className="text-slate-300 text-xs leading-relaxed">{aiResponse}</p>
+                    </div>
+                  )}
+                  {aiError && (
+                    <div className="mb-4 p-2 bg-red-950/30 border border-red-500/30 rounded text-xs text-red-300">
+                      {aiError}
+                    </div>
+                  )}
+
                   {showScaleNotes && (
-                    <div className="bg-amber-950/30 border border-amber-800 rounded-lg p-2 mb-2 sm:mb-3">
-                      <p className="text-amber-400 text-[9px] sm:text-[10px]">{componentDetails[selectedComponent].scaleNote}</p>
+                    <div className="bg-amber-950/30 border border-amber-700 rounded-lg p-3 mb-4">
+                      <p className="text-amber-400 text-xs">{componentDetails[selectedComponent].scaleNote}</p>
                     </div>
                   )}
                   
-                  <div className="mb-2 sm:mb-3">
-                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Internals</div>
-                    <ul className="space-y-1">
+                  <div className="mb-4">
+                    <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Internals</div>
+                    <ul className="space-y-2">
                       {componentDetails[selectedComponent].internals.map((item, i) => (
-                        <li key={i} className="text-[10px] sm:text-xs text-slate-400 flex items-start gap-1.5">
-                          <span className="text-blue-400 mt-0.5 text-[9px] sm:text-[10px]">▸</span>
-                          <span>{item}</span>
+                        <li key={i} className="text-sm text-slate-400 flex items-start gap-2">
+                          <span className="text-blue-400 mt-1">▸</span>
+                          {item}
                         </li>
                       ))}
                     </ul>
                   </div>
                   
-                  <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
-                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Data Flow</div>
-                    <p className="text-[9px] sm:text-[10px] text-emerald-400 font-mono leading-relaxed">{componentDetails[selectedComponent].flow}</p>
+                  <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                    <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Data Flow</div>
+                    <p className="text-xs text-emerald-400 font-mono">{componentDetails[selectedComponent].flow}</p>
                   </div>
-                  
-                  {/* AI Explain Button */}
-                  <button
-                    onClick={() => handleAiExplain(selectedComponent, componentDetails)}
-                    disabled={isAiLoading || !GEMINI_API_KEY}
-                    className="w-full mt-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs rounded-lg flex items-center justify-center gap-2 transition-colors"
-                    aria-label="Get AI explanation for this component"
-                  >
-                    {isAiLoading ? (
-                      <>
-                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                        Thinking...
-                      </>
-                    ) : (
-                      <>⚡ AI Explain</>
-                    )}
-                  </button>
-                  {!GEMINI_API_KEY && (
-                    <p className="text-[9px] text-amber-400 mt-1 text-center">Add VITE_GEMINI_API_KEY to .env</p>
-                  )}
-                  
-                  {/* AI Response Panel */}
-                  {(aiResponse || aiError) && (
-                    <div className={`mt-2 p-3 rounded-lg border ${aiError ? 'bg-red-900/30 border-red-700' : 'bg-purple-900/30 border-purple-700'}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-[10px] font-semibold ${aiError ? 'text-red-400' : 'text-purple-400'}`}>
-                          {aiError ? '❌ Error' : '💡 AI Insight'}
-                        </span>
-                        <button onClick={clearAiResponse} className="text-slate-400 hover:text-white text-xs">✕</button>
-                      </div>
-                      <div className={`text-[10px] leading-relaxed ${aiError ? 'text-red-300' : 'text-slate-300'} whitespace-pre-wrap`}>
-                        {aiError || aiResponse}
-                      </div>
-                    </div>
-                  )}
                 </div>
               ) : (
-                <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-700 p-4 sm:p-6 text-center">
-                  <div className="text-slate-500 text-xs sm:text-base mb-1">← Select a component</div>
-                  <p className="text-slate-600 text-[10px] sm:text-xs">Click any box for details</p>
+                <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-700 p-8 text-center">
+                  <div className="text-slate-500 text-lg mb-2">← Select a component</div>
+                  <p className="text-slate-600 text-sm">Click on any box to see detailed internals, analogies, and AI explanations.</p>
                 </div>
               )}
             </div>
           </div>
-          </main>
         )}
 
-        {/* ==================== FLOW VIEW - FIXED ARROWS ==================== */}
+        {/* Flow View - Deployment Lifecycle */}
         {activeView === 'flow' && (
-          <main role="main" aria-label="Flow view">
-          <div className="space-y-3 sm:space-y-4 md:space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h2 className="text-base sm:text-lg font-bold">Deployment Lifecycle</h2>
-                <p className="text-slate-500 text-[10px] sm:text-xs">kubectl apply → Running Pods</p>
+                <h2 className="text-lg md:text-xl font-bold">Deployment Lifecycle: From YAML to Running Pods</h2>
+                <p className="text-slate-500 text-xs md:text-sm">Watch how a single `kubectl apply` cascades through the system</p>
               </div>
-              <div className="flex flex-wrap gap-1.5 sm:gap-2" role="toolbar" aria-label="Flow animation controls">
-                <button 
-                  onClick={() => { setFlowStep(0); setIsFlowPlaying(true); }} 
-                  className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-[10px] sm:text-xs font-medium"
-                  aria-label="Play flow animation"
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => { setFlowStep(0); setIsFlowPlaying(true); }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium"
                 >
                   ▶ Play
                 </button>
-                <button 
-                  onClick={() => setFlowStep(s => Math.max(0, s - 1))} 
-                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
-                  aria-label="Previous step"
-                  disabled={flowStep === 0}
+                <button
+                  onClick={() => setFlowStep(s => Math.max(0, s - 1))}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium"
                 >
                   ←
                 </button>
-                <button 
-                  onClick={() => setFlowStep(s => Math.min(7, s + 1))} 
-                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
-                  aria-label="Next step"
-                  disabled={flowStep === 7}
+                <button
+                  onClick={() => setFlowStep(s => Math.min(7, s + 1))}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium"
                 >
                   →
                 </button>
-                <button 
-                  onClick={resetAll} 
-                  className="px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[9px] sm:text-[10px]"
-                  aria-label="Reset flow animation"
+                <button
+                  onClick={resetAll}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs"
                 >
                   Reset
                 </button>
               </div>
             </div>
 
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto">
-              <div className="min-w-[680px] lg:min-w-0">
-                <svg viewBox="0 0 750 280" className="w-full h-auto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Deployment lifecycle flow diagram showing steps from kubectl apply to running pods">
-                  {/* User Box */}
-                  <rect x={25} y={115} width={75} height={38} rx={5} 
-                    fill={flowSteps[flowStep].active.includes('user') ? '#f59e0b' : '#1e293b'} 
-                    stroke="#f59e0b" strokeWidth={1.5} />
-                  <text x={62} y={138} textAnchor="middle" fill="#fff" fontSize={10} fontWeight={600}>You</text>
+            <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 md:p-6 overflow-x-auto">
+              <div className="min-w-[700px]">
+                <svg viewBox="0 0 800 300" className="w-full h-auto">
+                  {/* User */}
+                  <rect x={30} y={130} width={80} height={40} rx={6} fill={flowSteps[flowStep].active.includes('user') ? '#f59e0b' : '#1e293b'} stroke="#f59e0b" strokeWidth={2} />
+                  <text x={70} y={155} textAnchor="middle" fill="#fff" fontSize={11}>You</text>
                   
                   {/* API Server */}
-                  <rect x={150} y={50} width={95} height={38} rx={5} 
-                    fill={flowSteps[flowStep].active.includes('apiserver') ? '#3b82f6' : '#1e3a5f'} 
-                    stroke="#3b82f6" strokeWidth={1.5} />
-                  <text x={197} y={73} textAnchor="middle" fill="#fff" fontSize={9}>API Server</text>
+                  <rect x={160} y={60} width={100} height={40} rx={6} fill={flowSteps[flowStep].active.includes('apiserver') ? '#3b82f6' : '#1e3a5f'} stroke="#3b82f6" strokeWidth={2} />
+                  <text x={210} y={85} textAnchor="middle" fill="#fff" fontSize={10}>API Server</text>
                   
-                  {/* Controllers */}
-                  <rect x={290} y={50} width={95} height={38} rx={5} 
-                    fill={flowSteps[flowStep].active.includes('controller') ? '#8b5cf6' : '#3b2970'} 
-                    stroke="#8b5cf6" strokeWidth={1.5} />
-                  <text x={337} y={73} textAnchor="middle" fill="#fff" fontSize={9}>Controllers</text>
+                  {/* Controller */}
+                  <rect x={310} y={60} width={100} height={40} rx={6} fill={flowSteps[flowStep].active.includes('controller') ? '#8b5cf6' : '#3b2970'} stroke="#8b5cf6" strokeWidth={2} />
+                  <text x={360} y={85} textAnchor="middle" fill="#fff" fontSize={10}>Controllers</text>
                   
                   {/* Scheduler */}
-                  <rect x={430} y={50} width={95} height={38} rx={5} 
-                    fill={flowSteps[flowStep].active.includes('scheduler') ? '#ec4899' : '#6b214f'} 
-                    stroke="#ec4899" strokeWidth={1.5} />
-                  <text x={477} y={73} textAnchor="middle" fill="#fff" fontSize={9}>Scheduler</text>
+                  <rect x={460} y={60} width={100} height={40} rx={6} fill={flowSteps[flowStep].active.includes('scheduler') ? '#ec4899' : '#6b214f'} stroke="#ec4899" strokeWidth={2} />
+                  <text x={510} y={85} textAnchor="middle" fill="#fff" fontSize={10}>Scheduler</text>
                   
                   {/* Kubelet */}
-                  <rect x={430} y={165} width={95} height={38} rx={5} 
-                    fill={flowSteps[flowStep].active.includes('kubelet') ? '#10b981' : '#134e3a'} 
-                    stroke="#10b981" strokeWidth={1.5} />
-                  <text x={477} y={188} textAnchor="middle" fill="#fff" fontSize={9}>Kubelet</text>
+                  <rect x={460} y={180} width={100} height={40} rx={6} fill={flowSteps[flowStep].active.includes('kubelet') ? '#10b981' : '#134e3a'} stroke="#10b981" strokeWidth={2} />
+                  <text x={510} y={205} textAnchor="middle" fill="#fff" fontSize={10}>Kubelet</text>
                   
-                  {/* containerd */}
-                  <rect x={570} y={165} width={95} height={38} rx={5} 
-                    fill={flowSteps[flowStep].active.includes('runtime') ? '#06b6d4' : '#164e63'} 
-                    stroke="#06b6d4" strokeWidth={1.5} />
-                  <text x={617} y={188} textAnchor="middle" fill="#fff" fontSize={9}>containerd</text>
+                  {/* Runtime */}
+                  <rect x={610} y={180} width={100} height={40} rx={6} fill={flowSteps[flowStep].active.includes('runtime') ? '#06b6d4' : '#164e63'} stroke="#06b6d4" strokeWidth={2} />
+                  <text x={660} y={205} textAnchor="middle" fill="#fff" fontSize={10}>containerd</text>
                   
-                  {/* kube-proxy */}
-                  <rect x={570} y={230} width={95} height={38} rx={5} 
-                    fill={flowSteps[flowStep].active.includes('kubeproxy') ? '#f97316' : '#6b3410'} 
-                    stroke="#f97316" strokeWidth={1.5} />
-                  <text x={617} y={253} textAnchor="middle" fill="#fff" fontSize={9}>kube-proxy</text>
+                  {/* etcd (Below API) */}
+                  <rect x={160} y={180} width={100} height={40} rx={6} fill="#1e293b" stroke="#64748b" strokeWidth={2} />
+                  <text x={210} y={205} textAnchor="middle" fill="#94a3b8" fontSize={10}>etcd</text>
+
+                  {/* Final Pod (Appears at end) */}
+                  <g className={`transition-opacity duration-1000 ${flowStep >= 6 ? 'opacity-100' : 'opacity-0'}`}>
+                    <rect x={610} y={250} width={100} height={40} rx={6} fill="#22c55e" stroke="#fff" strokeWidth={2} />
+                    <text x={660} y={275} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">Running Pod</text>
+                  </g>
                   
-                  {/* etcd */}
-                  <rect x={150} y={165} width={95} height={38} rx={5} fill="#1e293b" stroke="#64748b" strokeWidth={1.5} />
-                  <text x={197} y={188} textAnchor="middle" fill="#94a3b8" fontSize={9}>etcd</text>
-                  
-                  {/* Arrows - FIXED COORDINATES */}
-                  {flowStep >= 0 && <Arrow id="f0" x1={100} y1={134} x2={148} y2={78} isActive={flowStep === 0} showPacket={flowStep === 0} />}
-                  {flowStep >= 1 && <Arrow id="f1" x1={197} y1={90} x2={197} y2={163} isActive={flowStep === 1} showPacket={flowStep === 1} />}
-                  {flowStep >= 2 && <Arrow id="f2" x1={247} y1={69} x2={288} y2={69} isActive={flowStep === 2} showPacket={flowStep === 2} />}
-                  {flowStep >= 3 && <Arrow id="f3" x1={387} y1={69} x2={428} y2={69} isActive={flowStep >= 3 && flowStep <= 4} showPacket={flowStep === 4} />}
-                  {flowStep >= 5 && <Arrow id="f5" x1={477} y1={90} x2={477} y2={163} isActive={flowStep === 5} showPacket={flowStep === 5} />}
-                  {flowStep >= 6 && <Arrow id="f6" x1={527} y1={184} x2={568} y2={184} isActive={flowStep === 6} showPacket={flowStep === 6} />}
-                  {flowStep >= 7 && <Arrow id="f7" x1={527} y1={205} x2={568} y2={240} isActive={flowStep === 7} showPacket={flowStep === 7} />}
+                  {/* Arrows */}
+                  <Arrow x1={110} y1={150} x2={155} y2={90} isActive={flowStep === 0} isVisited={flowStep > 0} showPacket={flowStep === 0} />
+                  <Arrow x1={210} y1={105} x2={210} y2={175} isActive={flowStep === 1} isVisited={flowStep > 1} showPacket={flowStep === 1} />
+                  <Arrow x1={265} y1={80} x2={305} y2={80} isActive={flowStep === 2} isVisited={flowStep > 2} showPacket={flowStep === 2} />
+                  {flowStep === 3 && (
+                    <path d="M 360 55 C 360 30, 400 30, 400 55" fill="none" stroke="#8b5cf6" strokeWidth="2" markerEnd="url(#arrowhead-active)" className="animate-pulse" />
+                  )}
+                  <Arrow x1={415} y1={80} x2={455} y2={80} isActive={flowStep === 4} isVisited={flowStep > 4} showPacket={flowStep === 4} />
+                  <Arrow x1={510} y1={105} x2={510} y2={175} isActive={flowStep === 5} isVisited={flowStep > 5} showPacket={flowStep === 5} />
+                  <Arrow x1={565} y1={200} x2={605} y2={200} isActive={flowStep === 6} isVisited={flowStep > 6} showPacket={flowStep === 6} />
+                  <Arrow x1={660} y1={225} x2={660} y2={245} isActive={flowStep === 7} isVisited={flowStep > 7} showPacket={flowStep === 7} />
                 </svg>
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-emerald-500" role="status" aria-live="polite" aria-atomic="true">
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
-                <span className="bg-emerald-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">Step {flowStep + 1}/8</span>
-                <h3 className="text-xs sm:text-sm font-semibold">{flowSteps[flowStep].label}</h3>
+            {/* Current Step Description */}
+            <div className="bg-slate-800 rounded-xl p-5 border-l-4 border-emerald-500">
+              <div className="flex flex-wrap items-center gap-3 mb-2">
+                <span className="bg-emerald-600 text-white text-sm font-bold px-3 py-1 rounded-full">Step {flowStep + 1}/8</span>
+                <h3 className="text-base md:text-lg font-semibold">{flowSteps[flowStep].label}</h3>
               </div>
-              <p className="text-slate-400 text-[10px] sm:text-xs">{flowSteps[flowStep].description}</p>
+              <p className="text-slate-400 text-sm">{flowSteps[flowStep].description}</p>
             </div>
 
-            <div className="flex gap-1" role="tablist" aria-label="Flow step navigation">
-              {flowSteps.map((_, i) => (
-                <button 
-                  key={i} 
+            {/* Timeline */}
+            <div className="flex gap-1">
+              {flowSteps.map((step, i) => (
+                <button
+                  key={i}
                   onClick={() => setFlowStep(i)}
-                  className={`flex-1 h-1.5 rounded-full transition-all ${i === flowStep ? 'bg-emerald-500' : i < flowStep ? 'bg-emerald-800' : 'bg-slate-700'}`}
-                  role="tab"
-                  aria-selected={i === flowStep}
-                  aria-label={`Go to step ${i + 1}`}
+                  className={`flex-1 h-2 rounded-full transition-all ${
+                    i === flowStep ? 'bg-emerald-500' : i < flowStep ? 'bg-emerald-800' : 'bg-slate-700'
+                  }`}
+                  aria-label={`Step ${i + 1}`}
                 />
               ))}
             </div>
-            <p className="text-[9px] sm:text-[10px] text-slate-600 text-center">← → navigate • Space play/pause</p>
+            
+            <p className="text-xs text-slate-600 text-center">← → to navigate • Space to play/pause</p>
           </div>
-          </main>
         )}
 
-        {/* ==================== SCHEDULER VIEW ==================== */}
+        {/* Scheduler View */}
         {activeView === 'scheduler' && (
-          <main role="main" aria-label="Scheduler view">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-base sm:text-lg font-bold">Scheduler Funnel</h2>
-                <button 
-                  onClick={resetAll} 
-                  className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-xs bg-slate-800 hover:bg-slate-700 rounded"
-                  aria-label="Reset scheduler funnel"
-                >
-                  Reset
-                </button>
+                <h2 className="text-lg md:text-xl font-bold">Scheduler Funnel</h2>
+                <button onClick={resetAll} className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 rounded">Reset</button>
               </div>
-              <p className="text-slate-500 text-[10px] sm:text-xs mb-3 sm:mb-4">filter → score → bind</p>
+              <p className="text-slate-500 text-xs md:text-sm mb-6">Not magic. Just filter → score → bind.</p>
               
-              <div className="space-y-1.5" role="list" aria-label="Scheduler filtering steps">
+              <div className="space-y-2">
                 {schedulerSteps.map((step, i) => (
-                  <button 
-                    key={i} 
+                  <button
+                    key={i}
                     onClick={() => setSchedulerStep(i)}
-                    className={`w-full text-left p-2 sm:p-2.5 rounded-lg border transition-all ${schedulerStep === i ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
-                    role="listitem"
-                    aria-label={`${step.label}, ${step.count} nodes remaining`}
-                    aria-current={schedulerStep === i ? 'step' : undefined}
+                    className={`w-full text-left p-3 md:p-4 rounded-lg border transition-all ${
+                      schedulerStep === i 
+                        ? 'bg-blue-600/20 border-blue-500' 
+                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                    }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-[10px] sm:text-xs">{step.label}</span>
-                      <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono ${step.count === 1 ? 'bg-emerald-600' : 'bg-slate-700'}`} aria-label={`${step.count} nodes`}>{step.count}</span>
+                      <span className="font-semibold text-sm">{step.label}</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-mono ${
+                        step.count === 1 ? 'bg-emerald-600' : 'bg-slate-700'
+                      }`}>
+                        {step.count} nodes
+                      </span>
                     </div>
                   </button>
                 ))}
               </div>
-              <p className="text-[9px] sm:text-[10px] text-slate-600 mt-3 text-center">↑ ↓ to navigate</p>
+              <p className="text-xs text-slate-600 mt-4 text-center">↑ ↓ to navigate</p>
             </div>
             
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4">
-              <div className="mb-3 sm:mb-4">
-                <h3 className="text-xs sm:text-sm font-bold mb-1">{schedulerSteps[schedulerStep].label}</h3>
-                <p className="text-slate-400 text-[10px] sm:text-xs">{schedulerSteps[schedulerStep].description}</p>
-                <p className="text-slate-500 text-[9px] sm:text-[10px] mt-0.5">{schedulerSteps[schedulerStep].detail}</p>
+            <div className="bg-slate-900 rounded-xl border border-slate-800 p-5">
+              <div className="mb-6">
+                <h3 className="text-lg font-bold mb-2">Step: {schedulerSteps[schedulerStep].label}</h3>
+                <p className="text-slate-400 text-sm">{schedulerSteps[schedulerStep].description}</p>
+                <p className="text-slate-500 text-xs mt-1">{schedulerSteps[schedulerStep].detail}</p>
               </div>
               
-              {/* Node Grid */}
-              <div className="mb-3 sm:mb-4">
-                <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Node Pool (100)</div>
-                <div className="grid grid-cols-10 gap-0.5 sm:gap-1 p-1.5 sm:p-2 bg-slate-800/50 rounded-lg">
+              {/* Node Grid Visualizer */}
+              <div className="mb-6">
+                <h4 className="text-xs text-slate-500 uppercase tracking-wider mb-2">Candidate Node Pool (100 Nodes)</h4>
+                <div className="grid grid-cols-10 gap-1.5 p-3 bg-slate-800/50 rounded-lg border border-slate-800">
                   {Array.from({ length: 100 }).map((_, i) => {
                     const isActive = i < schedulerSteps[schedulerStep].count;
                     const isWinner = schedulerStep === 6 && i === 0;
+
                     return (
-                      <div key={i} className={`w-full pt-[100%] rounded-sm transition-all duration-300 ${isWinner ? 'bg-emerald-500 scale-125 z-10 shadow-lg' : isActive ? 'bg-blue-500/70' : 'bg-red-900/20'}`} />
-                    );
+                      <div 
+                        key={i} 
+                        className={`
+                          w-full pt-[100%] rounded-sm relative transition-all duration-500
+                          ${isWinner ? 'bg-emerald-500 scale-125 z-10 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 
+                            isActive ? 'bg-blue-500/80 hover:bg-blue-400' : 'bg-red-900/20'}
+                        `}
+                      />
+                    )
                   })}
                 </div>
-                <div className="flex flex-wrap justify-between gap-2 text-[9px] sm:text-[10px] text-slate-500 mt-1.5">
-                  <span className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500/70 rounded-sm"></div> Eligible</span>
+                <div className="flex justify-between text-xs text-slate-500 mt-2">
+                  <span className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500/80 rounded-sm"></div> Eligible</span>
                   <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-900/20 rounded-sm"></div> Eliminated</span>
-                  <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-sm"></div> Winner</span>
+                  <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-sm"></div> Selected</span>
                 </div>
               </div>
               
-              <div className="p-2.5 sm:p-3 bg-slate-800 rounded-lg">
-                <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1">Insight</div>
-                <p className="text-slate-300 text-[10px] sm:text-xs">
-                  {schedulerStep < 5 ? "Filtering is elimination. Every predicate must pass." 
-                    : schedulerStep === 5 ? "Anti-affinity prevents co-location with matching pods."
-                    : "Scoring ranks survivors. Weighted plugins sum to final score."}
+              <div className="mt-4 p-4 bg-slate-800 rounded-lg">
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Core Insight</div>
+                <p className="text-slate-300 text-sm">
+                  {schedulerStep < 5 
+                    ? "Filtering is elimination. Every predicate must pass or the node is OUT. No partial credit."
+                    : schedulerStep === 5
+                    ? "Anti-affinity prevents co-location. If another DB pod exists on that node, it's eliminated."
+                    : "Scoring ranks survivors. Multiple plugins contribute weighted scores. Highest total wins."
+                  }
                 </p>
               </div>
             </div>
           </div>
-          </main>
         )}
 
-        {/* ==================== NETWORKING VIEW ==================== */}
+        {/* Networking View */}
         {activeView === 'networking' && (
-          <main role="main" aria-label="Networking view">
-          <div className="space-y-3 sm:space-y-4 md:space-y-5">
+          <div className="space-y-6 md:space-y-8">
             <div>
-              <h2 className="text-base sm:text-lg font-bold mb-1">The Four Networks + Service Types</h2>
-              <p className="text-slate-500 text-[10px] sm:text-xs">Every Pod gets a unique, routable IP</p>
+              <h2 className="text-lg md:text-xl font-bold mb-2">The Four Networks + Service Types</h2>
+              <p className="text-slate-500 text-xs md:text-sm">Kubernetes assumes a flat network. Every Pod gets a unique, routable IP.</p>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { name: 'Node Network', desc: 'Physical/VM links', color: '#3b82f6' },
-                { name: 'Pod Network', desc: 'Overlay (CNI)', color: '#10b981' },
-                { name: 'Service Network', desc: 'Virtual IPs', color: '#a78bfa' },
-                { name: 'External', desc: 'Ingress traffic', color: '#f97316' }
+                { name: 'Node Network', desc: 'Physical/virtual links between VMs', color: '#3b82f6' },
+                { name: 'Pod Network', desc: 'Overlay (Calico/Cilium). IP-per-Pod', color: '#10b981' },
+                { name: 'Service Network', desc: 'Virtual IPs. iptables/IPVS rules only', color: '#a78bfa' },
+                { name: 'External', desc: 'Ingress traffic from outside cluster', color: '#f97316' }
               ].map((net, i) => (
-                <div key={i} className="p-2 sm:p-2.5 rounded-lg border" style={{ borderColor: net.color + '40', backgroundColor: net.color + '10' }}>
-                  <div className="font-bold text-[10px] sm:text-xs mb-0.5" style={{ color: net.color }}>{net.name}</div>
-                  <p className="text-slate-400 text-[9px] sm:text-[10px]">{net.desc}</p>
+                <div 
+                  key={i}
+                  className="p-3 md:p-4 rounded-xl border-2"
+                  style={{ borderColor: net.color + '50', backgroundColor: net.color + '10' }}
+                >
+                  <div className="font-bold mb-1 text-sm" style={{ color: net.color }}>{net.name}</div>
+                  <p className="text-slate-400 text-xs">{net.desc}</p>
                 </div>
               ))}
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { type: 'ClusterIP', internal: true, external: false, desc: 'Internal only. iptables rules.', use: 'Backends, DBs' },
-                { type: 'NodePort', internal: true, external: true, desc: 'Opens 30000-32767 on all nodes.', use: 'Dev/test' },
-                { type: 'LoadBalancer', internal: true, external: true, desc: 'Cloud LB (AWS NLB/ALB).', use: 'Production' }
+                { type: 'ClusterIP', internal: true, external: false, desc: 'Internal only. Virtual IP exists only as iptables rules.', useCase: 'Backend services, databases' },
+                { type: 'NodePort', internal: true, external: true, desc: 'Opens port 30000-32767 on EVERY node.', useCase: 'Dev/test, on-prem without LB' },
+                { type: 'LoadBalancer', internal: true, external: true, desc: 'Cloud provisions external LB (AWS NLB/ALB).', useCase: 'Production external traffic' }
               ].map((svc, i) => (
-                <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-2.5 sm:p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs sm:text-sm font-bold">{svc.type}</h3>
+                <div key={i} className="bg-slate-900 rounded-xl border border-slate-800 p-4 md:p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-bold">{svc.type}</h3>
                     <div className="flex gap-1">
-                      <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded ${svc.internal ? 'bg-emerald-600' : 'bg-slate-700'}`}>Int</span>
-                      <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded ${svc.external ? 'bg-blue-600' : 'bg-slate-700'}`}>Ext</span>
+                      <span className={`px-2 py-0.5 text-xs rounded ${svc.internal ? 'bg-emerald-600' : 'bg-slate-700'}`}>Int</span>
+                      <span className={`px-2 py-0.5 text-xs rounded ${svc.external ? 'bg-blue-600' : 'bg-slate-700'}`}>Ext</span>
                     </div>
                   </div>
-                  <p className="text-slate-400 text-[10px] sm:text-xs mb-1">{svc.desc}</p>
-                  <div className="text-[9px] sm:text-[10px] text-slate-500">Use: {svc.use}</div>
+                  <p className="text-slate-400 text-sm mb-3">{svc.desc}</p>
+                  <div className="text-xs text-slate-500">Use: {svc.useCase}</div>
                 </div>
               ))}
             </div>
             
-            <div className="bg-slate-800 rounded-lg p-3 sm:p-4 border-l-4 border-cyan-500">
-              <h3 className="font-bold text-cyan-400 text-xs sm:text-sm mb-2">kube-proxy: iptables vs IPVS</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                <div className="bg-slate-900 p-2.5 sm:p-3 rounded-lg">
-                  <div className="font-medium text-slate-300 text-[10px] sm:text-xs mb-1">iptables (Legacy)</div>
-                  <p className="text-slate-400 text-[9px] sm:text-[10px]">O(n) rules. Falls over ~5000 services.</p>
+            <div className="bg-slate-800 rounded-xl p-5 border-l-4 border-cyan-500">
+              <h3 className="font-bold text-cyan-400 mb-3">kube-proxy Modes: Why IPVS Wins at Scale</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="bg-slate-900 p-4 rounded-lg">
+                  <div className="font-semibold text-slate-300 mb-2">iptables (Legacy)</div>
+                  <p className="text-slate-400 text-sm">O(n) rules. Every service = more rules = more latency. Falls over at ~5000 services.</p>
                 </div>
-                <div className="bg-slate-900 p-2.5 sm:p-3 rounded-lg border border-cyan-500/30">
-                  <div className="font-medium text-cyan-400 text-[10px] sm:text-xs mb-1">IPVS (Recommended)</div>
-                  <p className="text-slate-400 text-[9px] sm:text-[10px]">O(1) hash. 100k+ services.</p>
+                <div className="bg-slate-900 p-4 rounded-lg border border-cyan-500/30">
+                  <div className="font-semibold text-cyan-400 mb-2">IPVS (Recommended)</div>
+                  <p className="text-slate-400 text-sm">O(1) hash lookup. Handles 100k+ services. Supports real LB algos.</p>
                 </div>
               </div>
             </div>
             
+            {/* CNI Comparison */}
             <div>
-              <h3 className="text-xs sm:text-sm font-bold mb-2">CNI Plugins</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              <h3 className="text-base font-bold mb-3">CNI Plugin Comparison</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {[
-                  { name: 'Flannel', tag: 'Simple', desc: 'VXLAN overlay. No NetworkPolicy.', color: '#f59e0b' },
-                  { name: 'Calico', tag: 'Enterprise', desc: 'BGP routing. Full policies.', color: '#ef4444' },
-                  { name: 'Cilium', tag: 'eBPF', desc: 'L7 policies, observability.', color: '#8b5cf6' }
+                  { name: 'Flannel', tag: 'Simple', desc: 'L3 VXLAN overlay. No Network Policies. Good starter.', color: '#f59e0b' },
+                  { name: 'Calico', tag: 'Enterprise', desc: 'BGP routing or overlay. Full NetworkPolicy support.', color: '#ef4444' },
+                  { name: 'Cilium', tag: 'Advanced', desc: 'eBPF magic. L7 policies, observability, service mesh.', color: '#8b5cf6' }
                 ].map((cni, i) => (
-                  <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-2.5 sm:p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-[10px] sm:text-xs">{cni.name}</span>
-                      <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded" style={{ backgroundColor: cni.color + '25', color: cni.color }}>{cni.tag}</span>
+                  <div key={i} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="font-bold text-sm">{cni.name}</h4>
+                      <span className="px-2 py-0.5 text-xs rounded" style={{ backgroundColor: cni.color + '30', color: cni.color }}>{cni.tag}</span>
                     </div>
-                    <p className="text-slate-400 text-[9px] sm:text-[10px]">{cni.desc}</p>
+                    <p className="text-slate-400 text-xs">{cni.desc}</p>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-          </main>
         )}
 
-        {/* ==================== INGRESS VIEW (NEW) ==================== */}
-        {activeView === 'ingress' && (
-          <main role="main" aria-label="Ingress view">
-          <div className="space-y-3 sm:space-y-4 md:space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
-              <div>
-                <h2 className="text-base sm:text-lg font-bold">Ingress Traffic Flow</h2>
-                <p className="text-slate-500 text-[10px] sm:text-xs">How external HTTP(S) reaches your Pods</p>
-              </div>
-              <div className="flex gap-1.5 sm:gap-2" role="toolbar" aria-label="Ingress animation controls">
-                <button 
-                  onClick={() => { setIngressStep(0); setIsIngressPlaying(true); }} 
-                  className="px-2.5 sm:px-3 py-1.5 bg-orange-600 hover:bg-orange-500 rounded-lg text-[10px] sm:text-xs font-medium"
-                  aria-label="Play ingress animation"
-                >
-                  ▶ Play
-                </button>
-                <button 
-                  onClick={() => setIngressStep(s => Math.max(0, s - 1))} 
-                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
-                  aria-label="Previous step"
-                  disabled={ingressStep === 0}
-                >
-                  ←
-                </button>
-                <button 
-                  onClick={() => setIngressStep(s => Math.min(5, s + 1))} 
-                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
-                  aria-label="Next step"
-                  disabled={ingressStep === 5}
-                >
-                  →
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto">
-              <div className="min-w-[700px] lg:min-w-0">
-                <svg viewBox="0 0 750 260" className="w-full h-auto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Ingress traffic flow diagram showing how external requests reach pods">
-                  {/* Internet */}
-                  <rect x={20} y={100} width={80} height={50} rx={6} fill={ingressStep === 0 ? '#f97316' : '#3f3f46'} stroke="#f97316" strokeWidth={1.5} />
-                  <text x={60} y={130} textAnchor="middle" fill="#fff" fontSize={10}>Internet</text>
-                  
-                  {/* Load Balancer */}
-                  <rect x={140} y={100} width={90} height={50} rx={6} fill={ingressStep === 0 ? '#f97316' : '#1e293b'} stroke="#f97316" strokeWidth={1.5} />
-                  <text x={185} y={122} textAnchor="middle" fill="#fff" fontSize={9}>Cloud LB</text>
-                  <text x={185} y={136} textAnchor="middle" fill="#94a3b8" fontSize={7}>(or NodePort)</text>
-                  
-                  {/* Ingress Controller */}
-                  <rect x={270} y={100} width={100} height={50} rx={6} fill={ingressStep >= 1 && ingressStep <= 2 ? '#8b5cf6' : '#3b2970'} stroke="#8b5cf6" strokeWidth={1.5} />
-                  <text x={320} y={122} textAnchor="middle" fill="#fff" fontSize={9}>Ingress Controller</text>
-                  <text x={320} y={136} textAnchor="middle" fill="#c4b5fd" fontSize={7}>(nginx/traefik)</text>
-                  
-                  {/* Service */}
-                  <rect x={410} y={100} width={85} height={50} rx={6} fill={ingressStep >= 3 ? '#3b82f6' : '#1e3a5f'} stroke="#3b82f6" strokeWidth={1.5} />
-                  <text x={452} y={130} textAnchor="middle" fill="#fff" fontSize={9}>Service</text>
-                  
-                  {/* Endpoints */}
-                  <rect x={535} y={85} width={75} height={35} rx={5} fill={ingressStep >= 4 ? '#10b981' : '#134e3a'} stroke="#10b981" strokeWidth={1.5} />
-                  <text x={572} y={107} textAnchor="middle" fill="#fff" fontSize={8}>Endpoints</text>
-                  
-                  {/* Pods */}
-                  <g>
-                    <rect x={640} y={55} width={60} height={35} rx={5} fill={ingressStep >= 5 ? '#10b981' : '#0f172a'} stroke="#10b981" strokeWidth={1.5} />
-                    <text x={670} y={77} textAnchor="middle" fill="#fff" fontSize={8}>Pod 1</text>
-                    <rect x={640} y={105} width={60} height={35} rx={5} fill="#0f172a" stroke="#10b981" strokeWidth={1.5} />
-                    <text x={670} y={127} textAnchor="middle" fill="#fff" fontSize={8}>Pod 2</text>
-                    <rect x={640} y={155} width={60} height={35} rx={5} fill="#0f172a" stroke="#10b981" strokeWidth={1.5} />
-                    <text x={670} y={177} textAnchor="middle" fill="#fff" fontSize={8}>Pod 3</text>
-                  </g>
-                  
-                  {/* Ingress Rules Box */}
-                  <rect x={270} y={170} width={100} height={60} rx={5} fill="#1e1b4b" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 2" />
-                  <text x={320} y={188} textAnchor="middle" fill="#a5b4fc" fontSize={8}>Ingress Rules</text>
-                  <text x={320} y={202} textAnchor="middle" fill="#64748b" fontSize={7}>host: api.example.com</text>
-                  <text x={320} y={214} textAnchor="middle" fill="#64748b" fontSize={7}>path: /v1/*</text>
-                  
-                  {/* API Server connection */}
-                  <Arrow id="ing-rules" x1={320} y1={168} x2={320} y2={152} isActive={ingressStep >= 1} />
-                  
-                  {/* Main flow arrows */}
-                  <Arrow id="ing0" x1={102} y1={125} x2={138} y2={125} isActive={ingressStep >= 0} showPacket={ingressStep === 0} />
-                  <Arrow id="ing1" x1={232} y1={125} x2={268} y2={125} isActive={ingressStep >= 1} showPacket={ingressStep === 1} />
-                  <Arrow id="ing2" x1={372} y1={125} x2={408} y2={125} isActive={ingressStep >= 3} showPacket={ingressStep === 3} />
-                  <Arrow id="ing3" x1={497} y1={110} x2={533} y2={102} isActive={ingressStep >= 4} showPacket={ingressStep === 4} />
-                  <Arrow id="ing4" x1={612} y1={102} x2={638} y2={75} isActive={ingressStep >= 5} showPacket={ingressStep === 5} />
-                  
-                  {/* Bypass arrow label */}
-                  {ingressStep >= 5 && (
-                    <text x={580} y={55} textAnchor="middle" fill="#22c55e" fontSize={7}>Direct to Pod IP!</text>
-                  )}
-                </svg>
-              </div>
-            </div>
-
-            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-orange-500" role="status" aria-live="polite" aria-atomic="true">
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
-                <span className="bg-orange-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">Step {ingressStep + 1}/6</span>
-                <h3 className="text-xs sm:text-sm font-semibold">{ingressSteps[ingressStep].label}</h3>
-              </div>
-              <p className="text-slate-400 text-[10px] sm:text-xs">{ingressSteps[ingressStep].description}</p>
-            </div>
-
-            <div className="flex gap-1" role="tablist" aria-label="Ingress step navigation">
-              {ingressSteps.map((_, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => setIngressStep(i)}
-                  className={`flex-1 h-1.5 rounded-full transition-all ${i === ingressStep ? 'bg-orange-500' : i < ingressStep ? 'bg-orange-800' : 'bg-slate-700'}`}
-                  role="tab"
-                  aria-selected={i === ingressStep}
-                  aria-label={`Go to step ${i + 1}`}
-                />
-              ))}
-            </div>
-
-            {/* Key Insight */}
-            <div className="bg-slate-900 rounded-lg p-3 sm:p-4 border border-slate-800">
-              <h3 className="font-bold text-xs sm:text-sm mb-2 text-orange-400">Key Insight: Ingress Controller ≠ kube-proxy</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 text-[10px] sm:text-xs">
-                <div className="bg-slate-800 p-2.5 sm:p-3 rounded">
-                  <div className="text-purple-400 font-semibold mb-1">Ingress Controller</div>
-                  <p className="text-slate-400">L7 proxy (HTTP). Reads Ingress resources from API server. Routes by Host/Path headers. Connects directly to Pod IPs.</p>
-                </div>
-                <div className="bg-slate-800 p-2.5 sm:p-3 rounded">
-                  <div className="text-blue-400 font-semibold mb-1">kube-proxy</div>
-                  <p className="text-slate-400">L4 (TCP/UDP). Programs iptables/IPVS on every node. Routes ClusterIP → Pod IPs. No HTTP awareness.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          </main>
-        )}
-
-        {/* ==================== TROUBLESHOOTING VIEW ==================== */}
+        {/* Troubleshooting View */}
         {activeView === 'troubleshooting' && (
-          <main role="main" aria-label="Troubleshooting view">
-          <div className="space-y-3 sm:space-y-4 md:space-y-5">
+          <div className="space-y-6">
             <div>
-              <h2 className="text-base sm:text-lg font-bold mb-1">Troubleshooting Decision Trees</h2>
-              <p className="text-slate-500 text-[10px] sm:text-xs">Common failures and diagnostics</p>
+              <h2 className="text-lg md:text-xl font-bold mb-2">Troubleshooting Decision Trees</h2>
+              <p className="text-slate-500 text-xs md:text-sm">Common failure modes and how to diagnose them</p>
             </div>
 
-            {/* Smart Troubleshooter (AI) */}
-            <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-xl border border-purple-700/50 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-purple-400 text-lg">🤖</span>
-                <h3 className="text-sm font-bold text-purple-300">Smart Troubleshooter (AI)</h3>
-                {!GEMINI_API_KEY && (
-                  <span className="text-[10px] text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded">API key required</span>
-                )}
+            {/* AI Troubleshooter Section */}
+            <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-xl border border-indigo-700/50 p-6 shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">⚡</span>
+                <h3 className="text-lg font-bold text-white">Smart Troubleshooter</h3>
               </div>
-              <div className="flex gap-2">
+              <p className="text-indigo-200 text-sm mb-4">
+                Describe your error message or symptom below (e.g., "Pod stuck in Pending state" or "504 Gateway Timeout"), and our AI will generate a diagnostic checklist.
+              </p>
+              
+              <div className="flex gap-2 mb-4">
                 <input
                   type="text"
                   value={troubleshootQuery}
                   onChange={(e) => setTroubleshootQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSmartTroubleshoot()}
-                  placeholder="Describe your Kubernetes issue... (e.g., 'pods stuck in Pending', 'CrashLoopBackOff')"
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                  disabled={!GEMINI_API_KEY}
-                  aria-label="Describe your Kubernetes issue"
+                  placeholder="E.g., CrashLoopBackOff on database pod..."
+                  className="flex-1 bg-slate-800/50 border border-indigo-500/30 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAiTroubleshoot()}
                 />
                 <button
-                  onClick={handleSmartTroubleshoot}
-                  disabled={isAiLoading || !troubleshootQuery.trim() || !GEMINI_API_KEY}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+                  onClick={handleAiTroubleshoot}
+                  disabled={isAiLoading || !troubleshootQuery}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-bold py-2 px-6 rounded-lg transition-all shadow-lg shadow-indigo-500/20"
                 >
                   {isAiLoading ? 'Analyzing...' : 'Diagnose'}
                 </button>
               </div>
-              
-              {/* AI Response in Troubleshooter */}
-              {(aiResponse || aiError) && activeView === 'troubleshooting' && (
-                <div className={`mt-3 p-3 rounded-lg border ${aiError ? 'bg-red-900/30 border-red-700' : 'bg-slate-800/80 border-purple-700/50'}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-semibold ${aiError ? 'text-red-400' : 'text-purple-400'}`}>
-                      {aiError ? '❌ Error' : '🔍 AI Diagnosis'}
-                    </span>
-                    <button onClick={clearAiResponse} className="text-slate-400 hover:text-white text-xs">✕ Clear</button>
-                  </div>
-                  <div className={`text-xs leading-relaxed ${aiError ? 'text-red-300' : 'text-slate-300'} whitespace-pre-wrap prose prose-invert prose-xs max-w-none`}>
-                    {aiError || aiResponse}
+
+              {aiResponse && !aiError && (
+                <div className="bg-black/30 rounded-lg p-4 border border-indigo-500/20 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="prose prose-invert prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap font-sans text-sm text-slate-300 bg-transparent p-0 m-0 border-0">{aiResponse}</pre>
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Summary Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-              {[
-                { label: 'Total', count: troubleshootingScenarios.length, color: 'white', bg: 'slate' },
-                { label: 'Scheduling', count: troubleshootingScenarios.filter(s => s.category === 'scheduling').length, color: 'blue' },
-                { label: 'Runtime', count: troubleshootingScenarios.filter(s => s.category === 'runtime').length, color: 'purple' },
-                { label: 'Storage', count: troubleshootingScenarios.filter(s => s.category === 'storage').length, color: 'emerald' },
-                { label: 'Resources', count: troubleshootingScenarios.filter(s => s.category === 'resources').length, color: 'amber' },
-                { label: 'Networking', count: troubleshootingScenarios.filter(s => s.category === 'networking').length, color: 'orange' },
-              ].map((stat, i) => (
-                <button
-                  key={i}
-                  onClick={() => stat.label === 'Total' ? setTroubleshootingFilter('all') : setTroubleshootingFilter(stat.label.toLowerCase())}
-                  className={`p-2 rounded-lg border transition-all ${
-                    (stat.label === 'Total' && troubleshootingFilter === 'all') || 
-                    (stat.label.toLowerCase() === troubleshootingFilter)
-                      ? 'bg-blue-600/20 border-blue-500' 
-                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                  }`}
-                  aria-label={`Show ${stat.label} scenarios`}
-                >
-                  <div className={`text-lg sm:text-xl font-bold text-${stat.color || stat.bg}-400`}>{stat.count}</div>
-                  <div className="text-[10px] sm:text-xs text-slate-400">{stat.label}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Search and Filter Controls */}
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4">
-              <div className="flex flex-col md:flex-row gap-2 sm:gap-3">
-                <div className="flex-1">
-                  <label htmlFor="troubleshoot-search" className="text-[10px] sm:text-xs text-slate-400 mb-1 block">Search scenarios</label>
-                  <input
-                    id="troubleshoot-search"
-                    type="text"
-                    value={troubleshootingSearch}
-                    onChange={(e) => setTroubleshootingSearch(e.target.value)}
-                    placeholder="Type to search symptoms, causes, fixes..."
-                    className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    aria-label="Search troubleshooting scenarios"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="troubleshoot-filter" className="text-[10px] sm:text-xs text-slate-400 mb-1 block">Filter by category</label>
-                  <select
-                    id="troubleshoot-filter"
-                    value={troubleshootingFilter}
-                    onChange={(e) => setTroubleshootingFilter(e.target.value)}
-                    className="w-full md:w-auto px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    aria-label="Filter by category"
-                  >
-                    <option value="all">All Categories</option>
-                    <option value="scheduling">Scheduling</option>
-                    <option value="runtime">Runtime</option>
-                    <option value="storage">Storage</option>
-                    <option value="resources">Resources</option>
-                    <option value="networking">Networking</option>
-                  </select>
-                </div>
-              </div>
               
-              {/* Active filters display */}
-              {(troubleshootingSearch || troubleshootingFilter !== 'all') && (
-                <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[10px] text-slate-500">Active filters:</span>
-                  {troubleshootingSearch && (
-                    <button
-                      onClick={() => setTroubleshootingSearch('')}
-                      className="px-2 py-0.5 bg-blue-600/20 border border-blue-600/50 rounded text-[10px] text-blue-400 hover:bg-blue-600/30 transition-colors flex items-center gap-1"
-                      aria-label="Clear search filter"
-                    >
-                      "{troubleshootingSearch}"
-                      <span>×</span>
-                    </button>
-                  )}
-                  {troubleshootingFilter !== 'all' && (
-                    <button
-                      onClick={() => setTroubleshootingFilter('all')}
-                      className="px-2 py-0.5 bg-purple-600/20 border border-purple-600/50 rounded text-[10px] text-purple-400 hover:bg-purple-600/30 transition-colors flex items-center gap-1"
-                      aria-label="Clear category filter"
-                    >
-                      {troubleshootingFilter}
-                      <span>×</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setTroubleshootingSearch('');
-                      setTroubleshootingFilter('all');
-                    }}
-                    className="text-[10px] text-slate-500 hover:text-slate-300 underline"
-                    aria-label="Clear all filters"
-                  >
-                    Clear all
-                  </button>
+              {aiError && (
+                <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-red-300 text-sm">
+                  {aiError}
                 </div>
               )}
-            </div>
-
-            {/* Results count */}
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>
-                Showing {troubleshootingScenarios.filter(scenario => {
-                  const matchesCategory = troubleshootingFilter === 'all' || scenario.category === troubleshootingFilter;
-                  const matchesSearch = !troubleshootingSearch || 
-                    scenario.title.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                    scenario.symptom.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                    scenario.causes.some(cause => 
-                      cause.cause.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                      cause.check.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                      cause.fix.toLowerCase().includes(troubleshootingSearch.toLowerCase())
-                    );
-                  return matchesCategory && matchesSearch;
-                }).length} of {troubleshootingScenarios.length} scenarios
-              </span>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {troubleshootingScenarios
-                .filter(scenario => {
-                  const matchesCategory = troubleshootingFilter === 'all' || scenario.category === troubleshootingFilter;
-                  const matchesSearch = !troubleshootingSearch || 
-                    scenario.title.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                    scenario.symptom.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                    scenario.causes.some(cause => 
-                      cause.cause.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                      cause.check.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                      cause.fix.toLowerCase().includes(troubleshootingSearch.toLowerCase())
-                    );
-                  return matchesCategory && matchesSearch;
-                })
-                .map((scenario) => (
-                <div key={scenario.id} className="bg-slate-900 rounded-lg border border-slate-800 p-3 sm:p-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="text-xs sm:text-sm font-bold text-red-400">{scenario.title}</h3>
-                    <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded whitespace-nowrap bg-slate-700/50 text-slate-300 border border-slate-600">
-                      {scenario.category}
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {troubleshootingScenarios.map((scenario, i) => (
+                <div key={i} className="bg-slate-900 rounded-xl border border-slate-800 p-4 md:p-5">
+                  <h3 className="text-base font-bold text-red-400 mb-2">{scenario.title}</h3>
+                  <div className="bg-slate-800 rounded-lg p-3 mb-4">
+                    <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Symptom</div>
+                    <p className="text-slate-300 text-sm">{scenario.symptom}</p>
                   </div>
-                  <div className="bg-slate-800 rounded p-2 mb-2 sm:mb-3">
-                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase mb-0.5">Symptom</div>
-                    <p className="text-slate-300 text-[10px] sm:text-xs">{scenario.symptom}</p>
-                  </div>
-                  <div className="space-y-1.5 sm:space-y-2">
+                  
+                  <div className="space-y-3">
                     {scenario.causes.map((cause, j) => (
-                      <div key={j} className="border-l-2 border-slate-700 pl-2">
-                        <div className="text-[10px] sm:text-xs font-medium text-white mb-0.5">{cause.cause}</div>
-                        <div className="text-[9px] sm:text-[10px] text-slate-400 mb-0.5">
+                      <div key={j} className="border-l-2 border-slate-700 pl-3">
+                        <div className="text-sm font-semibold text-white mb-1">{cause.cause}</div>
+                        <div className="text-xs text-slate-400 mb-1">
                           <span className="text-blue-400">Check: </span>
-                          <code className="bg-slate-800 px-1 rounded break-all">{cause.check}</code>
+                          <code className="bg-slate-800 px-1 rounded text-xs">{cause.check}</code>
                         </div>
-                        <div className="text-[9px] sm:text-[10px]">
+                        <div className="text-xs">
                           <span className="text-slate-500">Fix: </span>
                           <span className="text-emerald-400">{cause.fix}</span>
                         </div>
@@ -1822,228 +1212,106 @@ spec:
                 </div>
               ))}
             </div>
+            
+            {/* Quick Reference */}
+            <div className="bg-slate-800 rounded-xl p-4 md:p-5">
+              <h3 className="font-bold mb-3">Quick Diagnostic Commands</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                <div className="space-y-2">
+                  <div><span className="text-emerald-400">kubectl describe pod &lt;name&gt;</span> <span className="text-slate-500">- Events</span></div>
+                  <div><span className="text-emerald-400">kubectl logs &lt;pod&gt; --previous</span> <span className="text-slate-500">- Crash logs</span></div>
+                  <div><span className="text-emerald-400">kubectl get events --sort-by='.lastTimestamp'</span></div>
+                </div>
+                <div className="space-y-2">
+                  <div><span className="text-emerald-400">kubectl get endpoints &lt;svc&gt;</span> <span className="text-slate-500">- Service targets</span></div>
+                  <div><span className="text-emerald-400">kubectl exec -it &lt;pod&gt; -- nslookup kubernetes</span></div>
+                  <div><span className="text-emerald-400">kubectl top nodes</span> <span className="text-slate-500">- Resource pressure</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-            {/* No results message */}
-            {troubleshootingScenarios.filter(scenario => {
-              const matchesCategory = troubleshootingFilter === 'all' || scenario.category === troubleshootingFilter;
-              const matchesSearch = !troubleshootingSearch || 
-                scenario.title.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                scenario.symptom.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                scenario.causes.some(cause => 
-                  cause.cause.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                  cause.check.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
-                  cause.fix.toLowerCase().includes(troubleshootingSearch.toLowerCase())
-                );
-              return matchesCategory && matchesSearch;
-            }).length === 0 && (
-              <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-700 p-6 sm:p-8 text-center">
-                <div className="text-slate-500 text-sm sm:text-base mb-2">No scenarios found</div>
-                <p className="text-slate-600 text-xs sm:text-sm mb-3">Try adjusting your search or filters</p>
+        {/* Quiz View */}
+        {activeView === 'quiz' && (
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold mb-2">Knowledge Check</h2>
+              <p className="text-slate-400 text-sm">Test your understanding of Kubernetes internals.</p>
+            </div>
+
+            {!showQuizResult ? (
+              <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 shadow-xl">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Question {currentQuestion + 1}/{quizQuestions.length}</span>
+                  <span className="text-xs font-bold text-emerald-500">Score: {quizScore}</span>
+                </div>
+                
+                <h3 className="text-lg md:text-xl font-bold mb-8">{quizQuestions[currentQuestion].q}</h3>
+                
+                <div className="space-y-3">
+                  {quizQuestions[currentQuestion].options.map((option, index) => {
+                    const isSelected = selectedAnswer === index;
+                    const isCorrect = index === quizQuestions[currentQuestion].correct;
+                    const showCorrectness = selectedAnswer !== null;
+                    
+                    let bgClass = "bg-slate-800 hover:bg-slate-700";
+                    if (showCorrectness) {
+                      if (isCorrect) bgClass = "bg-emerald-600/20 border-emerald-500 text-emerald-200";
+                      else if (isSelected && !isCorrect) bgClass = "bg-red-600/20 border-red-500 text-red-200";
+                      else bgClass = "opacity-50 bg-slate-800";
+                    } else if (isSelected) {
+                      bgClass = "bg-blue-600 text-white";
+                    }
+
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => !showCorrectness && handleQuizAnswer(index)}
+                        disabled={showCorrectness}
+                        className={`w-full text-left p-4 rounded-lg border border-transparent transition-all ${bgClass}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>{option}</span>
+                          {showCorrectness && isCorrect && <span className="text-emerald-500">✓</span>}
+                          {showCorrectness && isSelected && !isCorrect && <span className="text-red-500">✕</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center shadow-xl">
+                <div className="text-6xl mb-4">🏆</div>
+                <h3 className="text-2xl font-bold mb-2">Quiz Complete!</h3>
+                <p className="text-slate-400 mb-6">You scored <span className="text-emerald-400 font-bold">{quizScore}</span> out of {quizQuestions.length}</p>
+                
+                <div className="w-full bg-slate-800 rounded-full h-4 mb-8 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all duration-1000"
+                    style={{ width: `${(quizScore / quizQuestions.length) * 100}%` }}
+                  />
+                </div>
+
                 <button
-                  onClick={() => {
-                    setTroubleshootingSearch('');
-                    setTroubleshootingFilter('all');
-                  }}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs transition-colors"
+                  onClick={restartQuiz}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold transition-all shadow-lg hover:shadow-blue-500/20"
                 >
-                  Clear filters
+                  Try Again
                 </button>
               </div>
             )}
-            
-            <div className="bg-slate-800 rounded-lg p-3 sm:p-4">
-              <h3 className="font-bold text-xs sm:text-sm mb-2">Quick Commands</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[9px] sm:text-[10px] font-mono">
-                <div className="space-y-1">
-                  <div className="break-all"><span className="text-emerald-400">kubectl describe pod &lt;name&gt;</span> <span className="text-slate-500">- Events</span></div>
-                  <div className="break-all"><span className="text-emerald-400">kubectl logs &lt;pod&gt; --previous</span> <span className="text-slate-500">- Crash logs</span></div>
-                  <div className="break-all"><span className="text-emerald-400">kubectl get events --sort-by='.lastTimestamp'</span></div>
-                </div>
-                <div className="space-y-1">
-                  <div className="break-all"><span className="text-emerald-400">kubectl get endpoints &lt;svc&gt;</span> <span className="text-slate-500">- Service targets</span></div>
-                  <div className="break-all"><span className="text-emerald-400">kubectl exec -it &lt;pod&gt; -- nslookup kubernetes</span></div>
-                  <div className="break-all"><span className="text-emerald-400">kubectl top nodes</span> <span className="text-slate-500">- Resources</span></div>
-                </div>
-              </div>
-            </div>
           </div>
-          </main>
-        )}
-
-        {/* ==================== QUIZ VIEW ==================== */}
-        {activeView === 'quiz' && (
-          <main role="main" aria-label="Quiz view">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-4 sm:mb-6">
-              <h2 className="text-lg sm:text-xl font-bold mb-1">Knowledge Check</h2>
-              <p className="text-slate-400 text-[10px] sm:text-xs">Test your K8s internals understanding</p>
-            </div>
-
-            <div className="flex gap-2 justify-center mb-4">
-              {['beginner', 'intermediate', 'advanced'].map(level => (
-                <button
-                  key={level}
-                  onClick={() => changeDifficulty(level)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    quizDifficulty === level
-                      ? level === 'beginner' ? 'bg-emerald-600 text-white' 
-                        : level === 'intermediate' ? 'bg-blue-600 text-white'
-                        : 'bg-red-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                  }`}
-                >
-                  {level.charAt(0).toUpperCase() + level.slice(1)}
-                  <span className="ml-1 text-[10px] opacity-70">({quizQuestions[level].length}Q)</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2">
-                {!showQuizResult ? (
-                  <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6">
-                    <div className="flex justify-between items-center mb-3 sm:mb-4">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
-                        Q {currentQuestion + 1}/{quizQuestions[quizDifficulty].length}
-                      </span>
-                      <span className="text-[10px] sm:text-xs font-bold text-emerald-500" role="status" aria-live="polite">
-                        Score: {quizScore}
-                      </span>
-                    </div>
-                    
-                    <h3 className="text-sm sm:text-base font-bold mb-4 sm:mb-5" id="quiz-question">
-                      {quizQuestions[quizDifficulty][currentQuestion].q}
-                    </h3>
-                    
-                    <div className="space-y-2" role="radiogroup" aria-labelledby="quiz-question">
-                      {quizQuestions[quizDifficulty][currentQuestion].options.map((option, index) => {
-                        const isSelected = selectedAnswer === index;
-                        const isCorrect = index === quizQuestions[quizDifficulty][currentQuestion].correct;
-                        const showCorrectness = selectedAnswer !== null;
-                        
-                        let bgClass = "bg-slate-800 hover:bg-slate-700";
-                        if (showCorrectness) {
-                          if (isCorrect) bgClass = "bg-emerald-600/20 border-emerald-500";
-                          else if (isSelected && !isCorrect) bgClass = "bg-red-600/20 border-red-500";
-                          else bgClass = "opacity-40 bg-slate-800";
-                        }
-
-                        return (
-                          <button 
-                            key={index} 
-                            onClick={() => !showCorrectness && handleQuizAnswer(index)} 
-                            disabled={showCorrectness}
-                            className={`w-full text-left p-2.5 sm:p-3 rounded-lg border border-transparent transition-all text-xs sm:text-sm ${bgClass}`}
-                            role="radio"
-                            aria-checked={isSelected}
-                            aria-label={`Option ${index + 1}: ${option}${showCorrectness ? (isCorrect ? ', correct answer' : isSelected ? ', incorrect' : '') : ''}`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span>{option}</span>
-                              {showCorrectness && isCorrect && <span className="text-emerald-500" aria-label="correct">✓</span>}
-                              {showCorrectness && isSelected && !isCorrect && <span className="text-red-500" aria-label="incorrect">✕</span>}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6 text-center">
-                    <div className="text-4xl sm:text-5xl mb-3">🏆</div>
-                    <h3 className="text-lg sm:text-xl font-bold mb-1">Complete!</h3>
-                    <p className="text-slate-400 text-xs sm:text-base mb-3 sm:mb-4">
-                      Score: <span className="text-emerald-400 font-bold">{quizScore}</span> / {quizQuestions[quizDifficulty].length}
-                      <span className="ml-2 text-slate-500">
-                        ({Math.round((quizScore / quizQuestions[quizDifficulty].length) * 100)}%)
-                      </span>
-                    </p>
-                    <div 
-                      className="w-full bg-slate-800 rounded-full h-2.5 sm:h-3 mb-4 sm:mb-5 overflow-hidden"
-                      role="progressbar"
-                      aria-valuenow={quizScore}
-                      aria-valuemin={0}
-                      aria-valuemax={quizQuestions[quizDifficulty].length}
-                      aria-label={`Quiz score: ${quizScore} out of ${quizQuestions[quizDifficulty].length}`}
-                    >
-                      <div className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all" 
-                        style={{ width: `${(quizScore / quizQuestions[quizDifficulty].length) * 100}%` }} />
-                    </div>
-                    <button 
-                      onClick={restartQuiz} 
-                      className="px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-xs sm:text-sm"
-                      aria-label="Restart quiz"
-                    >
-                      Try Again
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="lg:col-span-1">
-                <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
-                  <h3 className="text-sm font-bold mb-3 text-slate-300">Recent History</h3>
-                  {quizHistory.length === 0 ? (
-                    <div className="text-center text-slate-500 text-xs py-4">
-                      No quiz attempts yet
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {quizHistory.map((attempt, i) => (
-                        <div key={i} className="bg-slate-800 rounded-lg p-2.5 border border-slate-700">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                              attempt.difficulty === 'beginner' ? 'bg-emerald-600/20 text-emerald-400'
-                              : attempt.difficulty === 'intermediate' ? 'bg-blue-600/20 text-blue-400'
-                              : 'bg-red-600/20 text-red-400'
-                            }`}>
-                              {attempt.difficulty}
-                            </span>
-                            <span className={`text-xs font-bold ${
-                              attempt.percentage >= 80 ? 'text-emerald-400'
-                              : attempt.percentage >= 60 ? 'text-blue-400'
-                              : 'text-red-400'
-                            }`}>
-                              {attempt.percentage}%
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-slate-400">
-                              {attempt.score}/{attempt.total}
-                            </span>
-                            <span className="text-[9px] text-slate-500">
-                              {new Date(attempt.date).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {quizHistory.length > 0 && (
-                    <button
-                      onClick={() => {
-                        setQuizHistory([]);
-                        localStorage.removeItem('k8s-quiz-history');
-                      }}
-                      className="w-full mt-3 px-2 py-1.5 text-[10px] text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded transition-all"
-                    >
-                      Clear History
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          </main>
         )}
       </div>
       
       {/* Footer */}
-      <footer className="border-t border-slate-800 bg-slate-900/50 py-2 mt-4 sm:mt-6" role="contentinfo">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 text-center text-[9px] sm:text-[10px] text-slate-600">
-          1-7 switch views • ← → navigate • Space play • Esc clear
+      <div className="border-t border-slate-800 bg-slate-900/50 py-3 mt-8">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 text-center text-xs text-slate-600">
+          Keyboard: 1-6 switch views • ← → navigate • Space play/pause • Esc clear
         </div>
-      </footer>
+      </div>
     </div>
   );
 }
