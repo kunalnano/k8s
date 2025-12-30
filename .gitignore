@@ -6,6 +6,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Environment variables (NEVER commit API keys!)
+.env
+.env.local
+.env.*.local
+
 # Build outputs
 dist/
 dist-ssr/
