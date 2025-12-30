@@ -76,8 +76,8 @@ export default function K8sDeepDive() {
       throw new Error('Gemini API key not configured. Create .env file with VITE_GEMINI_API_KEY=your_key');
     }
 
-    // Using gemini-1.5-flash - available in free tier without billing
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    // Using v1 stable API with gemini-pro (widely available)
+    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
     
     let lastError;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
