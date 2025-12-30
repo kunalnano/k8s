@@ -16,6 +16,7 @@ export default function K8sDeepDive() {
   const [failureMode, setFailureMode] = useState(false);
   const [failedComponent, setFailedComponent] = useState(null);
   const [trafficSimulation, setTrafficSimulation] = useState(false);
+  const [simulationStatus, setSimulationStatus] = useState("");
   
   // YAML Mapping State
   const [selectedYamlField, setSelectedYamlField] = useState(null);
@@ -63,6 +64,7 @@ export default function K8sDeepDive() {
     setSelectedComponent(null);
     setFailedComponent(null);
     setTrafficSimulation(false);
+    setSimulationStatus("");
     setSelectedYamlField(null);
   }, []);
 
@@ -76,8 +78,8 @@ export default function K8sDeepDive() {
       throw new Error('Gemini API key not configured. Create .env file with VITE_GEMINI_API_KEY=your_key');
     }
 
-    // Using v1 stable API with gemini-pro (widely available)
-    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+    // Using v1beta API with gemini-2.5-flash-preview (user's working config)
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
     
     let lastError;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -241,6 +243,7 @@ Be concise and actionable. Use markdown formatting.`;
         setSelectedComponent(null);
         setFailedComponent(null);
         setTrafficSimulation(false);
+        setSimulationStatus("");
         setSelectedYamlField(null);
         if (activeView === 'flow') {
           setIsFlowPlaying(false);
@@ -312,10 +315,26 @@ Be concise and actionable. Use markdown formatting.`;
     }
   }, [isIngressPlaying, ingressStep]);
 
-  // Traffic Simulation Effect
+  // Traffic Simulation Logic
   useEffect(() => {
     if (trafficSimulation) {
-      const timer = setTimeout(() => setTrafficSimulation(false), 3000);
+      const stages = [
+        { t: 0, text: "1. User submits Request (kubectl apply)" },
+        { t: 800, text: "2. API Server Validates & Persists to Etcd" },
+        { t: 1600, text: "3. Scheduler detects new Pod & Assigns Node" },
+        { t: 2400, text: "4. Kubelet receives assignment" },
+        { t: 3200, text: "5. Container Runtime pulls image & starts container" },
+        { t: 4000, text: "Deployment Complete: Pod Running" }
+      ];
+
+      stages.forEach(stage => {
+        setTimeout(() => setSimulationStatus(stage.text), stage.t);
+      });
+
+      const timer = setTimeout(() => {
+        setTrafficSimulation(false);
+        setSimulationStatus("");
+      }, 4500);
       return () => clearTimeout(timer);
     }
   }, [trafficSimulation]);
@@ -882,9 +901,16 @@ spec:
                     aria-label="Simulate traffic flow"
                     aria-busy={trafficSimulation}
                   >
-                    {trafficSimulation ? '...' : '🚀 Simulate'}
+                    {trafficSimulation ? 'Tracing...' : '🚀 Trace Deployment'}
                   </button>
                 </div>
+
+                {/* Simulation Status Banner */}
+                {trafficSimulation && simulationStatus && (
+                  <div className="absolute top-16 right-4 bg-rose-900/90 border border-rose-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-xl animate-pulse z-20">
+                    {simulationStatus}
+                  </div>
+                )}
 
                 {failureMode && (
                   <div className="mb-3 p-2 bg-red-950/50 border border-red-900 rounded text-[10px] sm:text-xs text-red-300">
