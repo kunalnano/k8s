@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function App() {
+export default function K8sDeepDive() {
   const [activeView, setActiveView] = useState('architecture');
   const [selectedComponent, setSelectedComponent] = useState(null);
   
