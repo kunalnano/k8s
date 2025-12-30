@@ -30,6 +30,11 @@ export default function K8sDeepDive() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [showQuizResult, setShowQuizResult] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [quizDifficulty, setQuizDifficulty] = useState('beginner');
+  const [quizHistory, setQuizHistory] = useState(() => {
+    const saved = localStorage.getItem('k8s-quiz-history');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   // Troubleshooting State
   const [troubleshootingSearch, setTroubleshootingSearch] = useState('');
@@ -417,15 +422,38 @@ spec:
     { label: 'Scoring', count: 1, description: 'Score remaining 8: LeastRequestedPriority wins node-7', detail: 'Multiple scoring plugins weighted and summed' }
   ];
 
-  const quizQuestions = [
-    { q: "Which component is the only one that communicates directly with etcd?", options: ["kube-scheduler", "kube-apiserver", "kubelet", "kube-controller-manager"], correct: 1 },
-    { q: "If you have 1000 Services, which kube-proxy mode should you use?", options: ["userspace", "iptables", "IPVS", "ebpf-lite"], correct: 2 },
-    { q: "Which is NOT a phase in the Pod lifecycle?", options: ["Pending", "ContainerCreating", "Running", "Compiling"], correct: 3 },
-    { q: "What happens if a Pod lacks a Toleration for a node's Taint?", options: ["Pod warns but schedules", "Pod rejected from that node", "Pod crashes", "Node deletes Pod"], correct: 1 },
-    { q: "Which component talks to the container runtime via CRI?", options: ["kube-proxy", "etcd", "kubelet", "Cloud Controller"], correct: 2 },
-    { q: "Where does an Ingress Controller get its routing rules from?", options: ["ConfigMap only", "API Server (Ingress resources)", "CoreDNS", "kube-proxy"], correct: 1 },
-    { q: "What key format does etcd use to store a Pod named 'web' in namespace 'prod'?", options: ["/pods/prod/web", "/registry/pods/prod/web", "/v1/pods/web", "/api/pods/prod-web"], correct: 1 }
-  ];
+  const quizQuestions = {
+    beginner: [
+      { q: "Which component is the only one that communicates directly with etcd?", options: ["kube-scheduler", "kube-apiserver", "kubelet", "kube-controller-manager"], correct: 1 },
+      { q: "If you have 1000 Services, which kube-proxy mode should you use?", options: ["userspace", "iptables", "IPVS", "ebpf-lite"], correct: 2 },
+      { q: "Which is NOT a phase in the Pod lifecycle?", options: ["Pending", "ContainerCreating", "Running", "Compiling"], correct: 3 },
+      { q: "What happens if a Pod lacks a Toleration for a node's Taint?", options: ["Pod warns but schedules", "Pod rejected from that node", "Pod crashes", "Node deletes Pod"], correct: 1 },
+      { q: "Which component talks to the container runtime via CRI?", options: ["kube-proxy", "etcd", "kubelet", "Cloud Controller"], correct: 2 },
+      { q: "Where does an Ingress Controller get its routing rules from?", options: ["ConfigMap only", "API Server (Ingress resources)", "CoreDNS", "kube-proxy"], correct: 1 },
+      { q: "What key format does etcd use to store a Pod named 'web' in namespace 'prod'?", options: ["/pods/prod/web", "/registry/pods/prod/web", "/v1/pods/web", "/api/pods/prod-web"], correct: 1 }
+    ],
+    intermediate: [
+      { q: "What is the primary difference between a DaemonSet and a Deployment?", options: ["DaemonSets use more memory", "DaemonSets run one pod per node", "DaemonSets can't be updated", "DaemonSets are stateful"], correct: 1 },
+      { q: "In a StatefulSet, how are pod names assigned?", options: ["Random UUIDs", "Sequential ordinal indices (0,1,2...)", "By node name", "By creation timestamp"], correct: 1 },
+      { q: "What happens to a StatefulSet's PersistentVolume when the pod is deleted?", options: ["Automatically deleted", "Retained (not deleted)", "Moved to another pod", "Backed up to etcd"], correct: 1 },
+      { q: "Which RBAC resource binds a Role to a user/group within a namespace?", options: ["ClusterRoleBinding", "RoleBinding", "ServiceAccount", "RoleAttachment"], correct: 1 },
+      { q: "What component watches for new Custom Resource Definition (CRD) instances?", options: ["API Server only", "Custom Controller/Operator", "Scheduler", "Kubelet"], correct: 1 },
+      { q: "DaemonSets ignore which scheduler constraint by default?", options: ["Taints", "Node affinity", "Resource limits", "Unschedulable nodes"], correct: 3 },
+      { q: "What field in StatefulSet spec controls the number of pods updated at once?", options: ["maxSurge", "partition", "maxUnavailable", "parallelism"], correct: 1 }
+    ],
+    advanced: [
+      { q: "In RBAC, what is the difference between Role and ClusterRole?", options: ["Roles are deprecated", "Roles are namespaced, ClusterRoles are cluster-wide", "ClusterRoles can't modify resources", "No difference"], correct: 1 },
+      { q: "When creating a CRD, which field defines the API group?", options: ["metadata.group", "spec.group", "apiVersion", "spec.names.group"], correct: 1 },
+      { q: "What is the purpose of a StatefulSet's serviceName field?", options: ["For monitoring", "Creates headless Service for network identity", "Sets pod hostname", "Required but unused"], correct: 1 },
+      { q: "How does a DaemonSet ensure pods run even on nodes with NoSchedule taints?", options: ["It doesn't", "Automatic tolerations for critical DaemonSets", "Bypasses scheduler entirely", "Removes taints temporarily"], correct: 1 },
+      { q: "What does spec.updateStrategy.rollingUpdate.partition do in StatefulSets?", options: ["Limits replicas", "Updates pods with ordinal >= partition value", "Splits pods across zones", "Partitions storage"], correct: 1 },
+      { q: "Which verb in RBAC allows reading secrets?", options: ["read", "get", "list", "watch"], correct: 1 },
+      { q: "What is the purpose of CRD validation schemas (OpenAPI v3)?", options: ["Performance optimization", "Validate custom resource instances before persistence", "Generate documentation", "Enable caching"], correct: 1 },
+      { q: "How do you make a CRD subresource like /status or /scale available?", options: ["They're automatic", "Define in spec.subresources", "Create separate CRD", "Use admission webhooks"], correct: 1 },
+      { q: "What is the finalizer pattern in custom controllers?", options: ["Cleanup hook before resource deletion", "Final update after creation", "End-of-lifecycle logging", "Performance optimization"], correct: 0 },
+      { q: "In StatefulSets, what is the pod management policy 'Parallel' vs 'OrderedReady'?", options: ["No difference", "Parallel creates/deletes pods simultaneously", "Parallel uses more CPU", "OrderedReady is deprecated"], correct: 1 }
+    ]
+  };
 
   const troubleshootingScenarios = [
     {
@@ -499,17 +527,33 @@ spec:
 
   const handleQuizAnswer = (index) => {
     setSelectedAnswer(index);
-    if (index === quizQuestions[currentQuestion].correct) {
+    const questions = quizQuestions[quizDifficulty];
+    if (index === questions[currentQuestion].correct) {
       setQuizScore(s => s + 1);
     }
     setTimeout(() => {
       setSelectedAnswer(null);
-      if (currentQuestion < quizQuestions.length - 1) {
+      if (currentQuestion < questions.length - 1) {
         setCurrentQuestion(q => q + 1);
       } else {
         setShowQuizResult(true);
+        saveQuizResult();
       }
     }, 1500);
+  };
+
+  const saveQuizResult = () => {
+    const questions = quizQuestions[quizDifficulty];
+    const result = {
+      date: new Date().toISOString(),
+      difficulty: quizDifficulty,
+      score: quizScore + (selectedAnswer === questions[currentQuestion].correct ? 1 : 0),
+      total: questions.length,
+      percentage: Math.round(((quizScore + (selectedAnswer === questions[currentQuestion].correct ? 1 : 0)) / questions.length) * 100)
+    };
+    const newHistory = [result, ...quizHistory].slice(0, 10);
+    setQuizHistory(newHistory);
+    localStorage.setItem('k8s-quiz-history', JSON.stringify(newHistory));
   };
 
   const restartQuiz = () => {
@@ -517,6 +561,11 @@ spec:
     setCurrentQuestion(0);
     setShowQuizResult(false);
     setSelectedAnswer(null);
+  };
+
+  const changeDifficulty = (difficulty) => {
+    setQuizDifficulty(difficulty);
+    restartQuiz();
   };
 
   // Reusable SVG Arrow component with unique marker IDs
@@ -1589,78 +1638,166 @@ spec:
         {/* ==================== QUIZ VIEW ==================== */}
         {activeView === 'quiz' && (
           <main role="main" aria-label="Quiz view">
-          <div className="max-w-xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             <div className="text-center mb-4 sm:mb-6">
               <h2 className="text-lg sm:text-xl font-bold mb-1">Knowledge Check</h2>
               <p className="text-slate-400 text-[10px] sm:text-xs">Test your K8s internals understanding</p>
             </div>
 
-            {!showQuizResult ? (
-              <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6">
-                <div className="flex justify-between items-center mb-3 sm:mb-4">
-                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">Q {currentQuestion + 1}/{quizQuestions.length}</span>
-                  <span className="text-[10px] sm:text-xs font-bold text-emerald-500" role="status" aria-live="polite">Score: {quizScore}</span>
-                </div>
-                
-                <h3 className="text-sm sm:text-base font-bold mb-4 sm:mb-5" id="quiz-question">{quizQuestions[currentQuestion].q}</h3>
-                
-                <div className="space-y-2" role="radiogroup" aria-labelledby="quiz-question">
-                  {quizQuestions[currentQuestion].options.map((option, index) => {
-                    const isSelected = selectedAnswer === index;
-                    const isCorrect = index === quizQuestions[currentQuestion].correct;
-                    const showCorrectness = selectedAnswer !== null;
-                    
-                    let bgClass = "bg-slate-800 hover:bg-slate-700";
-                    if (showCorrectness) {
-                      if (isCorrect) bgClass = "bg-emerald-600/20 border-emerald-500";
-                      else if (isSelected && !isCorrect) bgClass = "bg-red-600/20 border-red-500";
-                      else bgClass = "opacity-40 bg-slate-800";
-                    }
-
-                    return (
-                      <button 
-                        key={index} 
-                        onClick={() => !showCorrectness && handleQuizAnswer(index)} 
-                        disabled={showCorrectness}
-                        className={`w-full text-left p-2.5 sm:p-3 rounded-lg border border-transparent transition-all text-xs sm:text-sm ${bgClass}`}
-                        role="radio"
-                        aria-checked={isSelected}
-                        aria-label={`Option ${index + 1}: ${option}${showCorrectness ? (isCorrect ? ', correct answer' : isSelected ? ', incorrect' : '') : ''}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>{option}</span>
-                          {showCorrectness && isCorrect && <span className="text-emerald-500" aria-label="correct">✓</span>}
-                          {showCorrectness && isSelected && !isCorrect && <span className="text-red-500" aria-label="incorrect">✕</span>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6 text-center">
-                <div className="text-4xl sm:text-5xl mb-3">🏆</div>
-                <h3 className="text-lg sm:text-xl font-bold mb-1">Complete!</h3>
-                <p className="text-slate-400 text-xs sm:text-base mb-3 sm:mb-4">Score: <span className="text-emerald-400 font-bold">{quizScore}</span> / {quizQuestions.length}</p>
-                <div 
-                  className="w-full bg-slate-800 rounded-full h-2.5 sm:h-3 mb-4 sm:mb-5 overflow-hidden"
-                  role="progressbar"
-                  aria-valuenow={quizScore}
-                  aria-valuemin={0}
-                  aria-valuemax={quizQuestions.length}
-                  aria-label={`Quiz score: ${quizScore} out of ${quizQuestions.length}`}
+            <div className="flex gap-2 justify-center mb-4">
+              {['beginner', 'intermediate', 'advanced'].map(level => (
+                <button
+                  key={level}
+                  onClick={() => changeDifficulty(level)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    quizDifficulty === level
+                      ? level === 'beginner' ? 'bg-emerald-600 text-white' 
+                        : level === 'intermediate' ? 'bg-blue-600 text-white'
+                        : 'bg-red-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
                 >
-                  <div className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all" style={{ width: `${(quizScore / quizQuestions.length) * 100}%` }} />
-                </div>
-                <button 
-                  onClick={restartQuiz} 
-                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-xs sm:text-sm"
-                  aria-label="Restart quiz"
-                >
-                  Try Again
+                  {level.charAt(0).toUpperCase() + level.slice(1)}
+                  <span className="ml-1 text-[10px] opacity-70">({quizQuestions[level].length}Q)</span>
                 </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                {!showQuizResult ? (
+                  <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6">
+                    <div className="flex justify-between items-center mb-3 sm:mb-4">
+                      <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">
+                        Q {currentQuestion + 1}/{quizQuestions[quizDifficulty].length}
+                      </span>
+                      <span className="text-[10px] sm:text-xs font-bold text-emerald-500" role="status" aria-live="polite">
+                        Score: {quizScore}
+                      </span>
+                    </div>
+                    
+                    <h3 className="text-sm sm:text-base font-bold mb-4 sm:mb-5" id="quiz-question">
+                      {quizQuestions[quizDifficulty][currentQuestion].q}
+                    </h3>
+                    
+                    <div className="space-y-2" role="radiogroup" aria-labelledby="quiz-question">
+                      {quizQuestions[quizDifficulty][currentQuestion].options.map((option, index) => {
+                        const isSelected = selectedAnswer === index;
+                        const isCorrect = index === quizQuestions[quizDifficulty][currentQuestion].correct;
+                        const showCorrectness = selectedAnswer !== null;
+                        
+                        let bgClass = "bg-slate-800 hover:bg-slate-700";
+                        if (showCorrectness) {
+                          if (isCorrect) bgClass = "bg-emerald-600/20 border-emerald-500";
+                          else if (isSelected && !isCorrect) bgClass = "bg-red-600/20 border-red-500";
+                          else bgClass = "opacity-40 bg-slate-800";
+                        }
+
+                        return (
+                          <button 
+                            key={index} 
+                            onClick={() => !showCorrectness && handleQuizAnswer(index)} 
+                            disabled={showCorrectness}
+                            className={`w-full text-left p-2.5 sm:p-3 rounded-lg border border-transparent transition-all text-xs sm:text-sm ${bgClass}`}
+                            role="radio"
+                            aria-checked={isSelected}
+                            aria-label={`Option ${index + 1}: ${option}${showCorrectness ? (isCorrect ? ', correct answer' : isSelected ? ', incorrect' : '') : ''}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>{option}</span>
+                              {showCorrectness && isCorrect && <span className="text-emerald-500" aria-label="correct">✓</span>}
+                              {showCorrectness && isSelected && !isCorrect && <span className="text-red-500" aria-label="incorrect">✕</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6 text-center">
+                    <div className="text-4xl sm:text-5xl mb-3">🏆</div>
+                    <h3 className="text-lg sm:text-xl font-bold mb-1">Complete!</h3>
+                    <p className="text-slate-400 text-xs sm:text-base mb-3 sm:mb-4">
+                      Score: <span className="text-emerald-400 font-bold">{quizScore}</span> / {quizQuestions[quizDifficulty].length}
+                      <span className="ml-2 text-slate-500">
+                        ({Math.round((quizScore / quizQuestions[quizDifficulty].length) * 100)}%)
+                      </span>
+                    </p>
+                    <div 
+                      className="w-full bg-slate-800 rounded-full h-2.5 sm:h-3 mb-4 sm:mb-5 overflow-hidden"
+                      role="progressbar"
+                      aria-valuenow={quizScore}
+                      aria-valuemin={0}
+                      aria-valuemax={quizQuestions[quizDifficulty].length}
+                      aria-label={`Quiz score: ${quizScore} out of ${quizQuestions[quizDifficulty].length}`}
+                    >
+                      <div className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all" 
+                        style={{ width: `${(quizScore / quizQuestions[quizDifficulty].length) * 100}%` }} />
+                    </div>
+                    <button 
+                      onClick={restartQuiz} 
+                      className="px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-xs sm:text-sm"
+                      aria-label="Restart quiz"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+
+              <div className="lg:col-span-1">
+                <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+                  <h3 className="text-sm font-bold mb-3 text-slate-300">Recent History</h3>
+                  {quizHistory.length === 0 ? (
+                    <div className="text-center text-slate-500 text-xs py-4">
+                      No quiz attempts yet
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {quizHistory.map((attempt, i) => (
+                        <div key={i} className="bg-slate-800 rounded-lg p-2.5 border border-slate-700">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                              attempt.difficulty === 'beginner' ? 'bg-emerald-600/20 text-emerald-400'
+                              : attempt.difficulty === 'intermediate' ? 'bg-blue-600/20 text-blue-400'
+                              : 'bg-red-600/20 text-red-400'
+                            }`}>
+                              {attempt.difficulty}
+                            </span>
+                            <span className={`text-xs font-bold ${
+                              attempt.percentage >= 80 ? 'text-emerald-400'
+                              : attempt.percentage >= 60 ? 'text-blue-400'
+                              : 'text-red-400'
+                            }`}>
+                              {attempt.percentage}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-slate-400">
+                              {attempt.score}/{attempt.total}
+                            </span>
+                            <span className="text-[9px] text-slate-500">
+                              {new Date(attempt.date).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {quizHistory.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setQuizHistory([]);
+                        localStorage.removeItem('k8s-quiz-history');
+                      }}
+                      className="w-full mt-3 px-2 py-1.5 text-[10px] text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded transition-all"
+                    >
+                      Clear History
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
           </main>
         )}
