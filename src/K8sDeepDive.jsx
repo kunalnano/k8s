@@ -40,6 +40,15 @@ export default function K8sDeepDive() {
   const [troubleshootingSearch, setTroubleshootingSearch] = useState('');
   const [troubleshootingFilter, setTroubleshootingFilter] = useState('all');
 
+  // AI Integration State
+  const [aiResponse, setAiResponse] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [troubleshootQuery, setTroubleshootQuery] = useState('');
+  
+  // API Key from environment variable (create .env with VITE_GEMINI_API_KEY=your_key)
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+
   // Set page title
   useEffect(() => {
     document.title = "Kubernetes Internals — Interactive Deep Dive";
@@ -55,6 +64,125 @@ export default function K8sDeepDive() {
     setFailedComponent(null);
     setTrafficSimulation(false);
     setSelectedYamlField(null);
+  }, []);
+
+  // ==================== AI INTEGRATION ====================
+  
+  /**
+   * Call Gemini API with exponential backoff retry
+   */
+  const callGemini = useCallback(async (prompt, maxRetries = 3) => {
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API key not configured. Create .env file with VITE_GEMINI_API_KEY=your_key');
+    }
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
+    let lastError;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Empty response from Gemini');
+        return text;
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
+      }
+    }
+    throw lastError;
+  }, [GEMINI_API_KEY]);
+
+  /**
+   * Get AI explanation for a Kubernetes component
+   */
+  const handleAiExplain = useCallback(async (componentId, componentDetails) => {
+    const component = componentDetails[componentId];
+    if (!component) return;
+
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiResponse(null);
+
+    const prompt = `You are a Kubernetes expert teacher. Explain the ${component.name} component.
+
+Context from our learning app:
+- Role: ${component.role}
+- Analogy: ${component.analogy}
+- Key internals: ${component.internals?.slice(0, 3).join('; ')}
+
+Please provide a concise response with:
+1. **Beginner Explanation** (2-3 sentences for someone new to K8s)
+2. **Production Insight** (one real-world tip from running K8s at scale)
+3. **Common Gotcha** (one mistake to avoid)
+
+Keep it practical and under 200 words.`;
+
+    try {
+      const response = await callGemini(prompt);
+      setAiResponse(response);
+    } catch (error) {
+      setAiError(error.message);
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [callGemini]);
+
+  /**
+   * Smart troubleshooting with AI
+   */
+  const handleSmartTroubleshoot = useCallback(async () => {
+    if (!troubleshootQuery.trim()) return;
+
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiResponse(null);
+
+    const prompt = `You are a Kubernetes troubleshooting expert. A user reports this issue:
+
+"${troubleshootQuery}"
+
+Provide a structured diagnosis:
+
+1. **Most Likely Cause** (one sentence)
+2. **Diagnostic Commands** (2-3 kubectl commands to run, with brief explanation)
+3. **Quick Fix** (step-by-step resolution, max 4 steps)
+4. **Prevention Tip** (how to avoid this in future)
+
+Be concise and actionable. Use markdown formatting.`;
+
+    try {
+      const response = await callGemini(prompt);
+      setAiResponse(response);
+    } catch (error) {
+      setAiError(error.message);
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [troubleshootQuery, callGemini]);
+
+  /**
+   * Clear AI response
+   */
+  const clearAiResponse = useCallback(() => {
+    setAiResponse(null);
+    setAiError(null);
   }, []);
 
   // Comprehensive keyboard navigation
@@ -987,6 +1115,41 @@ spec:
                     <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Data Flow</div>
                     <p className="text-[9px] sm:text-[10px] text-emerald-400 font-mono leading-relaxed">{componentDetails[selectedComponent].flow}</p>
                   </div>
+                  
+                  {/* AI Explain Button */}
+                  <button
+                    onClick={() => handleAiExplain(selectedComponent, componentDetails)}
+                    disabled={isAiLoading || !GEMINI_API_KEY}
+                    className="w-full mt-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs rounded-lg flex items-center justify-center gap-2 transition-colors"
+                    aria-label="Get AI explanation for this component"
+                  >
+                    {isAiLoading ? (
+                      <>
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                        Thinking...
+                      </>
+                    ) : (
+                      <>⚡ AI Explain</>
+                    )}
+                  </button>
+                  {!GEMINI_API_KEY && (
+                    <p className="text-[9px] text-amber-400 mt-1 text-center">Add VITE_GEMINI_API_KEY to .env</p>
+                  )}
+                  
+                  {/* AI Response Panel */}
+                  {(aiResponse || aiError) && (
+                    <div className={`mt-2 p-3 rounded-lg border ${aiError ? 'bg-red-900/30 border-red-700' : 'bg-purple-900/30 border-purple-700'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-[10px] font-semibold ${aiError ? 'text-red-400' : 'text-purple-400'}`}>
+                          {aiError ? '❌ Error' : '💡 AI Insight'}
+                        </span>
+                        <button onClick={clearAiResponse} className="text-slate-400 hover:text-white text-xs">✕</button>
+                      </div>
+                      <div className={`text-[10px] leading-relaxed ${aiError ? 'text-red-300' : 'text-slate-300'} whitespace-pre-wrap`}>
+                        {aiError || aiResponse}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-700 p-4 sm:p-6 text-center">
@@ -1424,6 +1587,51 @@ spec:
             <div>
               <h2 className="text-base sm:text-lg font-bold mb-1">Troubleshooting Decision Trees</h2>
               <p className="text-slate-500 text-[10px] sm:text-xs">Common failures and diagnostics</p>
+            </div>
+
+            {/* Smart Troubleshooter (AI) */}
+            <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-xl border border-purple-700/50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-purple-400 text-lg">🤖</span>
+                <h3 className="text-sm font-bold text-purple-300">Smart Troubleshooter (AI)</h3>
+                {!GEMINI_API_KEY && (
+                  <span className="text-[10px] text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded">API key required</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={troubleshootQuery}
+                  onChange={(e) => setTroubleshootQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSmartTroubleshoot()}
+                  placeholder="Describe your Kubernetes issue... (e.g., 'pods stuck in Pending', 'CrashLoopBackOff')"
+                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  disabled={!GEMINI_API_KEY}
+                  aria-label="Describe your Kubernetes issue"
+                />
+                <button
+                  onClick={handleSmartTroubleshoot}
+                  disabled={isAiLoading || !troubleshootQuery.trim() || !GEMINI_API_KEY}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  {isAiLoading ? 'Analyzing...' : 'Diagnose'}
+                </button>
+              </div>
+              
+              {/* AI Response in Troubleshooter */}
+              {(aiResponse || aiError) && activeView === 'troubleshooting' && (
+                <div className={`mt-3 p-3 rounded-lg border ${aiError ? 'bg-red-900/30 border-red-700' : 'bg-slate-800/80 border-purple-700/50'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-semibold ${aiError ? 'text-red-400' : 'text-purple-400'}`}>
+                      {aiError ? '❌ Error' : '🔍 AI Diagnosis'}
+                    </span>
+                    <button onClick={clearAiResponse} className="text-slate-400 hover:text-white text-xs">✕ Clear</button>
+                  </div>
+                  <div className={`text-xs leading-relaxed ${aiError ? 'text-red-300' : 'text-slate-300'} whitespace-pre-wrap prose prose-invert prose-xs max-w-none`}>
+                    {aiError || aiResponse}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Summary Stats */}
