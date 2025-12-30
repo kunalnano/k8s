@@ -523,7 +523,15 @@ spec:
       onClick={() => onClick(id)} 
       style={{ cursor: 'pointer' }}
       role="button"
-      aria-label={`${label} component`}
+      tabIndex={0}
+      aria-label={`${label} component${isActive ? ', selected' : ''}${isFailed ? ', failed' : ''}${isYamlHighlight ? ', highlighted' : ''}`}
+      aria-pressed={isActive || isYamlHighlight}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(id);
+        }
+      }}
     >
       <rect
         x={x}
@@ -581,7 +589,7 @@ spec:
       `}</style>
       
       {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
+      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-2 sm:py-3">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-3">
             <div>
@@ -590,7 +598,7 @@ spec:
               </h1>
               <p className="text-slate-500 text-[10px] sm:text-xs mt-0.5">Interactive Architecture Deep Dive</p>
             </div>
-            <div className="flex flex-wrap gap-1 sm:gap-1.5">
+            <nav aria-label="Main navigation" className="flex flex-wrap gap-1 sm:gap-1.5">
               {views.map(view => (
                 <button
                   key={view.id}
@@ -600,21 +608,24 @@ spec:
                       ? 'bg-blue-600 text-white' 
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                   }`}
+                  aria-label={`${view.label} view, press ${view.key}`}
+                  aria-current={activeView === view.id ? 'page' : undefined}
                   title={`Press ${view.key}`}
                 >
                   {view.label}
-                  <span className="ml-0.5 sm:ml-1 text-slate-500 text-[9px] sm:text-[10px] hidden sm:inline">{view.key}</span>
+                  <span className="ml-0.5 sm:ml-1 text-slate-500 text-[9px] sm:text-[10px] hidden sm:inline" aria-hidden="true">{view.key}</span>
                 </button>
               ))}
-            </div>
+            </nav>
           </div>
         </div>
-      </div>
+      </header>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5">
         
         {/* ==================== ARCHITECTURE VIEW ==================== */}
         {activeView === 'architecture' && (
+          <main role="main" aria-label="Architecture view">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
             <div className="xl:col-span-2">
               <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto relative">
@@ -622,21 +633,41 @@ spec:
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
                   <h2 className="text-xs sm:text-sm font-semibold text-slate-300">Click component →</h2>
                   <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
-                    <input type="checkbox" checked={showScaleNotes} onChange={e => setShowScaleNotes(e.target.checked)} className="rounded bg-slate-700 border-slate-600 text-blue-500 w-3 h-3" />
+                    <input 
+                      type="checkbox" 
+                      checked={showScaleNotes} 
+                      onChange={e => setShowScaleNotes(e.target.checked)} 
+                      className="rounded bg-slate-700 border-slate-600 text-blue-500 w-3 h-3" 
+                      aria-label="Show scale notes"
+                    />
                     <span className="text-slate-400">Scale</span>
                   </label>
                   <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
-                    <input type="checkbox" checked={failureMode} onChange={e => {setFailureMode(e.target.checked); setFailedComponent(null); setSelectedComponent(null);}} className="rounded bg-slate-700 border-slate-600 text-red-500 w-3 h-3" />
+                    <input 
+                      type="checkbox" 
+                      checked={failureMode} 
+                      onChange={e => {setFailureMode(e.target.checked); setFailedComponent(null); setSelectedComponent(null);}} 
+                      className="rounded bg-slate-700 border-slate-600 text-red-500 w-3 h-3" 
+                      aria-label="Enable failure mode"
+                    />
                     <span className="text-red-400">Failure</span>
                   </label>
                   <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
-                    <input type="checkbox" checked={showYamlPanel} onChange={e => {setShowYamlPanel(e.target.checked); setSelectedYamlField(null);}} className="rounded bg-slate-700 border-slate-600 text-purple-500 w-3 h-3" />
+                    <input 
+                      type="checkbox" 
+                      checked={showYamlPanel} 
+                      onChange={e => {setShowYamlPanel(e.target.checked); setSelectedYamlField(null);}} 
+                      className="rounded bg-slate-700 border-slate-600 text-purple-500 w-3 h-3" 
+                      aria-label="Show YAML mapping panel"
+                    />
                     <span className="text-purple-400">YAML Map</span>
                   </label>
                   <button
                     onClick={() => setTrafficSimulation(true)}
                     disabled={trafficSimulation}
                     className="ml-auto px-2 sm:px-2.5 py-1 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-700 text-[10px] sm:text-xs font-medium rounded transition-all"
+                    aria-label="Simulate traffic flow"
+                    aria-busy={trafficSimulation}
                   >
                     {trafficSimulation ? '...' : '🚀 Simulate'}
                   </button>
@@ -650,7 +681,7 @@ spec:
 
                 {/* Architecture SVG - FIXED ARROW ALIGNMENT */}
                 <div className="min-w-[640px] lg:min-w-0">
-                  <svg viewBox="0 0 680 400" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+                  <svg viewBox="0 0 680 400" className="w-full h-auto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Kubernetes architecture diagram showing control plane and worker node components">
                     {/* Control Plane Box */}
                     <rect x={15} y={15} width={650} height={160} rx={10} fill="none" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="6 3" />
                     <text x={30} y={38} fill="#3b82f6" fontSize={12} fontWeight={700}>CONTROL PLANE</text>
@@ -772,6 +803,16 @@ spec:
                               key={i} 
                               className={`yaml-line px-1 -mx-1 rounded ${selectedYamlField === fieldKey ? 'yaml-highlight' : ''} ${fieldKey ? '' : 'opacity-60'}`}
                               onClick={() => fieldKey && setSelectedYamlField(fieldKey === selectedYamlField ? null : fieldKey)}
+                              role={fieldKey ? 'button' : undefined}
+                              tabIndex={fieldKey ? 0 : undefined}
+                              aria-label={fieldKey ? `YAML field ${fieldKey}, handled by ${componentDetails[yamlFieldMapping[fieldKey]?.component]?.name}` : undefined}
+                              aria-pressed={fieldKey && selectedYamlField === fieldKey}
+                              onKeyDown={fieldKey ? (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setSelectedYamlField(fieldKey === selectedYamlField ? null : fieldKey);
+                                }
+                              } : undefined}
                             >
                               {line || ' '}
                             </div>
@@ -871,27 +912,55 @@ spec:
               )}
             </div>
           </div>
+          </main>
         )}
 
         {/* ==================== FLOW VIEW - FIXED ARROWS ==================== */}
         {activeView === 'flow' && (
+          <main role="main" aria-label="Flow view">
           <div className="space-y-3 sm:space-y-4 md:space-y-5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
               <div>
                 <h2 className="text-base sm:text-lg font-bold">Deployment Lifecycle</h2>
                 <p className="text-slate-500 text-[10px] sm:text-xs">kubectl apply → Running Pods</p>
               </div>
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                <button onClick={() => { setFlowStep(0); setIsFlowPlaying(true); }} className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-[10px] sm:text-xs font-medium">▶ Play</button>
-                <button onClick={() => setFlowStep(s => Math.max(0, s - 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">←</button>
-                <button onClick={() => setFlowStep(s => Math.min(7, s + 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">→</button>
-                <button onClick={resetAll} className="px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[9px] sm:text-[10px]">Reset</button>
+              <div className="flex flex-wrap gap-1.5 sm:gap-2" role="toolbar" aria-label="Flow animation controls">
+                <button 
+                  onClick={() => { setFlowStep(0); setIsFlowPlaying(true); }} 
+                  className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-[10px] sm:text-xs font-medium"
+                  aria-label="Play flow animation"
+                >
+                  ▶ Play
+                </button>
+                <button 
+                  onClick={() => setFlowStep(s => Math.max(0, s - 1))} 
+                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
+                  aria-label="Previous step"
+                  disabled={flowStep === 0}
+                >
+                  ←
+                </button>
+                <button 
+                  onClick={() => setFlowStep(s => Math.min(7, s + 1))} 
+                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
+                  aria-label="Next step"
+                  disabled={flowStep === 7}
+                >
+                  →
+                </button>
+                <button 
+                  onClick={resetAll} 
+                  className="px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[9px] sm:text-[10px]"
+                  aria-label="Reset flow animation"
+                >
+                  Reset
+                </button>
               </div>
             </div>
 
             <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto">
               <div className="min-w-[680px] lg:min-w-0">
-                <svg viewBox="0 0 750 280" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+                <svg viewBox="0 0 750 280" className="w-full h-auto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Deployment lifecycle flow diagram showing steps from kubectl apply to running pods">
                   {/* User Box */}
                   <rect x={25} y={115} width={75} height={38} rx={5} 
                     fill={flowSteps[flowStep].active.includes('user') ? '#f59e0b' : '#1e293b'} 
@@ -950,7 +1019,7 @@ spec:
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-emerald-500">
+            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-emerald-500" role="status" aria-live="polite" aria-atomic="true">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
                 <span className="bg-emerald-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">Step {flowStep + 1}/8</span>
                 <h3 className="text-xs sm:text-sm font-semibold">{flowSteps[flowStep].label}</h3>
@@ -958,33 +1027,53 @@ spec:
               <p className="text-slate-400 text-[10px] sm:text-xs">{flowSteps[flowStep].description}</p>
             </div>
 
-            <div className="flex gap-1">
+            <div className="flex gap-1" role="tablist" aria-label="Flow step navigation">
               {flowSteps.map((_, i) => (
-                <button key={i} onClick={() => setFlowStep(i)}
-                  className={`flex-1 h-1.5 rounded-full transition-all ${i === flowStep ? 'bg-emerald-500' : i < flowStep ? 'bg-emerald-800' : 'bg-slate-700'}`} />
+                <button 
+                  key={i} 
+                  onClick={() => setFlowStep(i)}
+                  className={`flex-1 h-1.5 rounded-full transition-all ${i === flowStep ? 'bg-emerald-500' : i < flowStep ? 'bg-emerald-800' : 'bg-slate-700'}`}
+                  role="tab"
+                  aria-selected={i === flowStep}
+                  aria-label={`Go to step ${i + 1}`}
+                />
               ))}
             </div>
             <p className="text-[9px] sm:text-[10px] text-slate-600 text-center">← → navigate • Space play/pause</p>
           </div>
+          </main>
         )}
 
         {/* ==================== SCHEDULER VIEW ==================== */}
         {activeView === 'scheduler' && (
+          <main role="main" aria-label="Scheduler view">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-base sm:text-lg font-bold">Scheduler Funnel</h2>
-                <button onClick={resetAll} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-xs bg-slate-800 hover:bg-slate-700 rounded">Reset</button>
+                <button 
+                  onClick={resetAll} 
+                  className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-xs bg-slate-800 hover:bg-slate-700 rounded"
+                  aria-label="Reset scheduler funnel"
+                >
+                  Reset
+                </button>
               </div>
               <p className="text-slate-500 text-[10px] sm:text-xs mb-3 sm:mb-4">filter → score → bind</p>
               
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" role="list" aria-label="Scheduler filtering steps">
                 {schedulerSteps.map((step, i) => (
-                  <button key={i} onClick={() => setSchedulerStep(i)}
-                    className={`w-full text-left p-2 sm:p-2.5 rounded-lg border transition-all ${schedulerStep === i ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
+                  <button 
+                    key={i} 
+                    onClick={() => setSchedulerStep(i)}
+                    className={`w-full text-left p-2 sm:p-2.5 rounded-lg border transition-all ${schedulerStep === i ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+                    role="listitem"
+                    aria-label={`${step.label}, ${step.count} nodes remaining`}
+                    aria-current={schedulerStep === i ? 'step' : undefined}
+                  >
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-[10px] sm:text-xs">{step.label}</span>
-                      <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono ${step.count === 1 ? 'bg-emerald-600' : 'bg-slate-700'}`}>{step.count}</span>
+                      <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono ${step.count === 1 ? 'bg-emerald-600' : 'bg-slate-700'}`} aria-label={`${step.count} nodes`}>{step.count}</span>
                     </div>
                   </button>
                 ))}
@@ -1028,10 +1117,12 @@ spec:
               </div>
             </div>
           </div>
+          </main>
         )}
 
         {/* ==================== NETWORKING VIEW ==================== */}
         {activeView === 'networking' && (
+          <main role="main" aria-label="Networking view">
           <div className="space-y-3 sm:space-y-4 md:space-y-5">
             <div>
               <h2 className="text-base sm:text-lg font-bold mb-1">The Four Networks + Service Types</h2>
@@ -1105,26 +1196,48 @@ spec:
               </div>
             </div>
           </div>
+          </main>
         )}
 
         {/* ==================== INGRESS VIEW (NEW) ==================== */}
         {activeView === 'ingress' && (
+          <main role="main" aria-label="Ingress view">
           <div className="space-y-3 sm:space-y-4 md:space-y-5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
               <div>
                 <h2 className="text-base sm:text-lg font-bold">Ingress Traffic Flow</h2>
                 <p className="text-slate-500 text-[10px] sm:text-xs">How external HTTP(S) reaches your Pods</p>
               </div>
-              <div className="flex gap-1.5 sm:gap-2">
-                <button onClick={() => { setIngressStep(0); setIsIngressPlaying(true); }} className="px-2.5 sm:px-3 py-1.5 bg-orange-600 hover:bg-orange-500 rounded-lg text-[10px] sm:text-xs font-medium">▶ Play</button>
-                <button onClick={() => setIngressStep(s => Math.max(0, s - 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">←</button>
-                <button onClick={() => setIngressStep(s => Math.min(5, s + 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">→</button>
+              <div className="flex gap-1.5 sm:gap-2" role="toolbar" aria-label="Ingress animation controls">
+                <button 
+                  onClick={() => { setIngressStep(0); setIsIngressPlaying(true); }} 
+                  className="px-2.5 sm:px-3 py-1.5 bg-orange-600 hover:bg-orange-500 rounded-lg text-[10px] sm:text-xs font-medium"
+                  aria-label="Play ingress animation"
+                >
+                  ▶ Play
+                </button>
+                <button 
+                  onClick={() => setIngressStep(s => Math.max(0, s - 1))} 
+                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
+                  aria-label="Previous step"
+                  disabled={ingressStep === 0}
+                >
+                  ←
+                </button>
+                <button 
+                  onClick={() => setIngressStep(s => Math.min(5, s + 1))} 
+                  className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs"
+                  aria-label="Next step"
+                  disabled={ingressStep === 5}
+                >
+                  →
+                </button>
               </div>
             </div>
 
             <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto">
               <div className="min-w-[700px] lg:min-w-0">
-                <svg viewBox="0 0 750 260" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+                <svg viewBox="0 0 750 260" className="w-full h-auto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Ingress traffic flow diagram showing how external requests reach pods">
                   {/* Internet */}
                   <rect x={20} y={100} width={80} height={50} rx={6} fill={ingressStep === 0 ? '#f97316' : '#3f3f46'} stroke="#f97316" strokeWidth={1.5} />
                   <text x={60} y={130} textAnchor="middle" fill="#fff" fontSize={10}>Internet</text>
@@ -1181,7 +1294,7 @@ spec:
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-orange-500">
+            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-orange-500" role="status" aria-live="polite" aria-atomic="true">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
                 <span className="bg-orange-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">Step {ingressStep + 1}/6</span>
                 <h3 className="text-xs sm:text-sm font-semibold">{ingressSteps[ingressStep].label}</h3>
@@ -1189,10 +1302,16 @@ spec:
               <p className="text-slate-400 text-[10px] sm:text-xs">{ingressSteps[ingressStep].description}</p>
             </div>
 
-            <div className="flex gap-1">
+            <div className="flex gap-1" role="tablist" aria-label="Ingress step navigation">
               {ingressSteps.map((_, i) => (
-                <button key={i} onClick={() => setIngressStep(i)}
-                  className={`flex-1 h-1.5 rounded-full transition-all ${i === ingressStep ? 'bg-orange-500' : i < ingressStep ? 'bg-orange-800' : 'bg-slate-700'}`} />
+                <button 
+                  key={i} 
+                  onClick={() => setIngressStep(i)}
+                  className={`flex-1 h-1.5 rounded-full transition-all ${i === ingressStep ? 'bg-orange-500' : i < ingressStep ? 'bg-orange-800' : 'bg-slate-700'}`}
+                  role="tab"
+                  aria-selected={i === ingressStep}
+                  aria-label={`Go to step ${i + 1}`}
+                />
               ))}
             </div>
 
@@ -1211,10 +1330,12 @@ spec:
               </div>
             </div>
           </div>
+          </main>
         )}
 
         {/* ==================== TROUBLESHOOTING VIEW ==================== */}
         {activeView === 'troubleshooting' && (
+          <main role="main" aria-label="Troubleshooting view">
           <div className="space-y-3 sm:space-y-4 md:space-y-5">
             <div>
               <h2 className="text-base sm:text-lg font-bold mb-1">Troubleshooting Decision Trees</h2>
@@ -1264,10 +1385,12 @@ spec:
               </div>
             </div>
           </div>
+          </main>
         )}
 
         {/* ==================== QUIZ VIEW ==================== */}
         {activeView === 'quiz' && (
+          <main role="main" aria-label="Quiz view">
           <div className="max-w-xl mx-auto">
             <div className="text-center mb-4 sm:mb-6">
               <h2 className="text-lg sm:text-xl font-bold mb-1">Knowledge Check</h2>
@@ -1278,12 +1401,12 @@ spec:
               <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6">
                 <div className="flex justify-between items-center mb-3 sm:mb-4">
                   <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">Q {currentQuestion + 1}/{quizQuestions.length}</span>
-                  <span className="text-[10px] sm:text-xs font-bold text-emerald-500">Score: {quizScore}</span>
+                  <span className="text-[10px] sm:text-xs font-bold text-emerald-500" role="status" aria-live="polite">Score: {quizScore}</span>
                 </div>
                 
-                <h3 className="text-sm sm:text-base font-bold mb-4 sm:mb-5">{quizQuestions[currentQuestion].q}</h3>
+                <h3 className="text-sm sm:text-base font-bold mb-4 sm:mb-5" id="quiz-question">{quizQuestions[currentQuestion].q}</h3>
                 
-                <div className="space-y-2">
+                <div className="space-y-2" role="radiogroup" aria-labelledby="quiz-question">
                   {quizQuestions[currentQuestion].options.map((option, index) => {
                     const isSelected = selectedAnswer === index;
                     const isCorrect = index === quizQuestions[currentQuestion].correct;
@@ -1297,12 +1420,19 @@ spec:
                     }
 
                     return (
-                      <button key={index} onClick={() => !showCorrectness && handleQuizAnswer(index)} disabled={showCorrectness}
-                        className={`w-full text-left p-2.5 sm:p-3 rounded-lg border border-transparent transition-all text-xs sm:text-sm ${bgClass}`}>
+                      <button 
+                        key={index} 
+                        onClick={() => !showCorrectness && handleQuizAnswer(index)} 
+                        disabled={showCorrectness}
+                        className={`w-full text-left p-2.5 sm:p-3 rounded-lg border border-transparent transition-all text-xs sm:text-sm ${bgClass}`}
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={`Option ${index + 1}: ${option}${showCorrectness ? (isCorrect ? ', correct answer' : isSelected ? ', incorrect' : '') : ''}`}
+                      >
                         <div className="flex items-center justify-between">
                           <span>{option}</span>
-                          {showCorrectness && isCorrect && <span className="text-emerald-500">✓</span>}
-                          {showCorrectness && isSelected && !isCorrect && <span className="text-red-500">✕</span>}
+                          {showCorrectness && isCorrect && <span className="text-emerald-500" aria-label="correct">✓</span>}
+                          {showCorrectness && isSelected && !isCorrect && <span className="text-red-500" aria-label="incorrect">✕</span>}
                         </div>
                       </button>
                     );
@@ -1314,22 +1444,36 @@ spec:
                 <div className="text-4xl sm:text-5xl mb-3">🏆</div>
                 <h3 className="text-lg sm:text-xl font-bold mb-1">Complete!</h3>
                 <p className="text-slate-400 text-xs sm:text-base mb-3 sm:mb-4">Score: <span className="text-emerald-400 font-bold">{quizScore}</span> / {quizQuestions.length}</p>
-                <div className="w-full bg-slate-800 rounded-full h-2.5 sm:h-3 mb-4 sm:mb-5 overflow-hidden">
+                <div 
+                  className="w-full bg-slate-800 rounded-full h-2.5 sm:h-3 mb-4 sm:mb-5 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={quizScore}
+                  aria-valuemin={0}
+                  aria-valuemax={quizQuestions.length}
+                  aria-label={`Quiz score: ${quizScore} out of ${quizQuestions.length}`}
+                >
                   <div className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all" style={{ width: `${(quizScore / quizQuestions.length) * 100}%` }} />
                 </div>
-                <button onClick={restartQuiz} className="px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-xs sm:text-sm">Try Again</button>
+                <button 
+                  onClick={restartQuiz} 
+                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-xs sm:text-sm"
+                  aria-label="Restart quiz"
+                >
+                  Try Again
+                </button>
               </div>
             )}
           </div>
+          </main>
         )}
       </div>
       
       {/* Footer */}
-      <div className="border-t border-slate-800 bg-slate-900/50 py-2 mt-4 sm:mt-6">
+      <footer className="border-t border-slate-800 bg-slate-900/50 py-2 mt-4 sm:mt-6" role="contentinfo">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 text-center text-[9px] sm:text-[10px] text-slate-600">
           1-7 switch views • ← → navigate • Space play • Esc clear
         </div>
-      </div>
+      </footer>
     </div>
   );
 }
