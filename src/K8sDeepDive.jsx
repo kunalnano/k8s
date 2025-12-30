@@ -31,6 +31,10 @@ export default function K8sDeepDive() {
   const [showQuizResult, setShowQuizResult] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
 
+  // Troubleshooting State
+  const [troubleshootingSearch, setTroubleshootingSearch] = useState('');
+  const [troubleshootingFilter, setTroubleshootingFilter] = useState('all');
+
   // Set page title
   useEffect(() => {
     document.title = "Kubernetes Internals — Interactive Deep Dive";
@@ -425,7 +429,7 @@ spec:
 
   const troubleshootingScenarios = [
     {
-      id: 'pending', title: 'Pod Stuck in Pending', symptom: 'kubectl get pods shows Pending for minutes',
+      id: 'pending', title: 'Pod Stuck in Pending', category: 'scheduling', symptom: 'kubectl get pods shows Pending for minutes',
       causes: [
         { cause: 'Insufficient resources', check: 'kubectl describe pod - look for "Insufficient cpu/memory"', fix: 'Scale cluster or reduce requests' },
         { cause: 'Node taints blocking', check: 'kubectl describe pod - look for "node(s) had taints"', fix: 'Add tolerations or untaint nodes' },
@@ -434,7 +438,7 @@ spec:
       ]
     },
     {
-      id: 'crashloop', title: 'CrashLoopBackOff', symptom: 'Container starts then immediately dies',
+      id: 'crashloop', title: 'CrashLoopBackOff', category: 'runtime', symptom: 'Container starts then immediately dies',
       causes: [
         { cause: 'Application crash', check: 'kubectl logs <pod> --previous', fix: 'Fix application code, check environment variables' },
         { cause: 'Liveness probe too aggressive', check: 'kubectl describe pod - check probe config', fix: 'Increase initialDelaySeconds, timeoutSeconds' },
@@ -443,7 +447,38 @@ spec:
       ]
     },
     {
-      id: 'service', title: 'Service Unreachable', symptom: 'curl to ClusterIP times out',
+      id: 'imagepull', title: 'ImagePullBackOff', category: 'runtime', symptom: 'Pod stuck in ImagePullBackOff or ErrImagePull',
+      causes: [
+        { cause: 'Image does not exist', check: 'kubectl describe pod - check Events for "not found" or 404', fix: 'Verify image name and tag in registry' },
+        { cause: 'Missing image pull secret', check: 'kubectl describe pod - look for "unauthorized" or 401', fix: 'Create imagePullSecrets and reference in pod spec' },
+        { cause: 'Private registry authentication failed', check: 'kubectl get secret <secret> -o yaml | base64 -d', fix: 'Recreate secret with correct credentials' },
+        { cause: 'Registry unreachable', check: 'kubectl exec -it <pod> -- curl <registry-url>', fix: 'Check network connectivity, firewall rules, DNS' },
+        { cause: 'Rate limit exceeded', check: 'kubectl describe pod - look for "429 Too Many Requests"', fix: 'Use authenticated pulls or mirror to private registry' }
+      ]
+    },
+    {
+      id: 'pvc', title: 'Persistent Volume Issues', category: 'storage', symptom: 'PVC stuck in Pending or Pod cannot mount volume',
+      causes: [
+        { cause: 'No StorageClass available', check: 'kubectl get storageclass', fix: 'Create or configure default StorageClass' },
+        { cause: 'Volume provisioner not running', check: 'kubectl get pods -n kube-system | grep <provisioner>', fix: 'Deploy or restart storage provisioner' },
+        { cause: 'Insufficient storage capacity', check: 'kubectl describe pvc - check Events for capacity errors', fix: 'Increase storage quota or use smaller PVC' },
+        { cause: 'Access mode mismatch', check: 'kubectl describe pv - compare accessModes with PVC', fix: 'Match ReadWriteOnce/ReadWriteMany between PV and PVC' },
+        { cause: 'Volume already mounted elsewhere', check: 'kubectl get pods -A -o wide | grep <volume>', fix: 'Delete pod holding volume or use ReadWriteMany' },
+        { cause: 'Node selector conflicts', check: 'kubectl describe pv - check nodeAffinity', fix: 'Ensure pod can schedule on nodes with PV affinity' }
+      ]
+    },
+    {
+      id: 'quota', title: 'Resource Quota Exceeded', category: 'resources', symptom: 'Pod creation fails with "exceeded quota" error',
+      causes: [
+        { cause: 'CPU quota exceeded', check: 'kubectl describe resourcequota -n <namespace>', fix: 'Reduce resource requests or increase quota limits' },
+        { cause: 'Memory quota exceeded', check: 'kubectl get resourcequota -n <namespace> -o yaml', fix: 'Scale down deployments or request quota increase' },
+        { cause: 'Pod count limit reached', check: 'kubectl describe quota - check pods used vs hard limit', fix: 'Delete unused pods or increase pod count quota' },
+        { cause: 'Storage quota exceeded', check: 'kubectl describe resourcequota - check persistentvolumeclaims', fix: 'Delete unused PVCs or request storage increase' },
+        { cause: 'Missing resource requests', check: 'kubectl describe pod - verify requests/limits defined', fix: 'Add resource requests to pod spec (required with quotas)' }
+      ]
+    },
+    {
+      id: 'service', title: 'Service Unreachable', category: 'networking', symptom: 'curl to ClusterIP times out',
       causes: [
         { cause: 'No endpoints', check: 'kubectl get endpoints <svc> - empty?', fix: 'Check pod labels match service selector' },
         { cause: 'Pods not ready', check: 'kubectl get pods - all Running but not Ready?', fix: 'Fix readiness probe failures' },
@@ -452,7 +487,7 @@ spec:
       ]
     },
     {
-      id: 'dns', title: 'DNS Resolution Failing', symptom: 'nslookup kubernetes.default fails from pod',
+      id: 'dns', title: 'DNS Resolution Failing', category: 'networking', symptom: 'nslookup kubernetes.default fails from pod',
       causes: [
         { cause: 'CoreDNS down', check: 'kubectl get pods -n kube-system -l k8s-app=kube-dns', fix: 'Restart CoreDNS, check logs' },
         { cause: 'resolv.conf wrong', check: 'kubectl exec <pod> -- cat /etc/resolv.conf', fix: 'Check kubelet DNS config, dnsPolicy' },
@@ -1341,11 +1376,146 @@ spec:
               <h2 className="text-base sm:text-lg font-bold mb-1">Troubleshooting Decision Trees</h2>
               <p className="text-slate-500 text-[10px] sm:text-xs">Common failures and diagnostics</p>
             </div>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+              {[
+                { label: 'Total', count: troubleshootingScenarios.length, color: 'white', bg: 'slate' },
+                { label: 'Scheduling', count: troubleshootingScenarios.filter(s => s.category === 'scheduling').length, color: 'blue' },
+                { label: 'Runtime', count: troubleshootingScenarios.filter(s => s.category === 'runtime').length, color: 'purple' },
+                { label: 'Storage', count: troubleshootingScenarios.filter(s => s.category === 'storage').length, color: 'emerald' },
+                { label: 'Resources', count: troubleshootingScenarios.filter(s => s.category === 'resources').length, color: 'amber' },
+                { label: 'Networking', count: troubleshootingScenarios.filter(s => s.category === 'networking').length, color: 'orange' },
+              ].map((stat, i) => (
+                <button
+                  key={i}
+                  onClick={() => stat.label === 'Total' ? setTroubleshootingFilter('all') : setTroubleshootingFilter(stat.label.toLowerCase())}
+                  className={`p-2 rounded-lg border transition-all ${
+                    (stat.label === 'Total' && troubleshootingFilter === 'all') || 
+                    (stat.label.toLowerCase() === troubleshootingFilter)
+                      ? 'bg-blue-600/20 border-blue-500' 
+                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                  }`}
+                  aria-label={`Show ${stat.label} scenarios`}
+                >
+                  <div className={`text-lg sm:text-xl font-bold text-${stat.color || stat.bg}-400`}>{stat.count}</div>
+                  <div className="text-[10px] sm:text-xs text-slate-400">{stat.label}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Search and Filter Controls */}
+            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4">
+              <div className="flex flex-col md:flex-row gap-2 sm:gap-3">
+                <div className="flex-1">
+                  <label htmlFor="troubleshoot-search" className="text-[10px] sm:text-xs text-slate-400 mb-1 block">Search scenarios</label>
+                  <input
+                    id="troubleshoot-search"
+                    type="text"
+                    value={troubleshootingSearch}
+                    onChange={(e) => setTroubleshootingSearch(e.target.value)}
+                    placeholder="Type to search symptoms, causes, fixes..."
+                    className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    aria-label="Search troubleshooting scenarios"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="troubleshoot-filter" className="text-[10px] sm:text-xs text-slate-400 mb-1 block">Filter by category</label>
+                  <select
+                    id="troubleshoot-filter"
+                    value={troubleshootingFilter}
+                    onChange={(e) => setTroubleshootingFilter(e.target.value)}
+                    className="w-full md:w-auto px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    aria-label="Filter by category"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="scheduling">Scheduling</option>
+                    <option value="runtime">Runtime</option>
+                    <option value="storage">Storage</option>
+                    <option value="resources">Resources</option>
+                    <option value="networking">Networking</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Active filters display */}
+              {(troubleshootingSearch || troubleshootingFilter !== 'all') && (
+                <div className="mt-2 flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] text-slate-500">Active filters:</span>
+                  {troubleshootingSearch && (
+                    <button
+                      onClick={() => setTroubleshootingSearch('')}
+                      className="px-2 py-0.5 bg-blue-600/20 border border-blue-600/50 rounded text-[10px] text-blue-400 hover:bg-blue-600/30 transition-colors flex items-center gap-1"
+                      aria-label="Clear search filter"
+                    >
+                      "{troubleshootingSearch}"
+                      <span>×</span>
+                    </button>
+                  )}
+                  {troubleshootingFilter !== 'all' && (
+                    <button
+                      onClick={() => setTroubleshootingFilter('all')}
+                      className="px-2 py-0.5 bg-purple-600/20 border border-purple-600/50 rounded text-[10px] text-purple-400 hover:bg-purple-600/30 transition-colors flex items-center gap-1"
+                      aria-label="Clear category filter"
+                    >
+                      {troubleshootingFilter}
+                      <span>×</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setTroubleshootingSearch('');
+                      setTroubleshootingFilter('all');
+                    }}
+                    className="text-[10px] text-slate-500 hover:text-slate-300 underline"
+                    aria-label="Clear all filters"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Results count */}
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Showing {troubleshootingScenarios.filter(scenario => {
+                  const matchesCategory = troubleshootingFilter === 'all' || scenario.category === troubleshootingFilter;
+                  const matchesSearch = !troubleshootingSearch || 
+                    scenario.title.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                    scenario.symptom.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                    scenario.causes.some(cause => 
+                      cause.cause.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                      cause.check.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                      cause.fix.toLowerCase().includes(troubleshootingSearch.toLowerCase())
+                    );
+                  return matchesCategory && matchesSearch;
+                }).length} of {troubleshootingScenarios.length} scenarios
+              </span>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {troubleshootingScenarios.map((scenario, i) => (
-                <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-3 sm:p-4">
-                  <h3 className="text-xs sm:text-sm font-bold text-red-400 mb-2">{scenario.title}</h3>
+              {troubleshootingScenarios
+                .filter(scenario => {
+                  const matchesCategory = troubleshootingFilter === 'all' || scenario.category === troubleshootingFilter;
+                  const matchesSearch = !troubleshootingSearch || 
+                    scenario.title.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                    scenario.symptom.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                    scenario.causes.some(cause => 
+                      cause.cause.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                      cause.check.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                      cause.fix.toLowerCase().includes(troubleshootingSearch.toLowerCase())
+                    );
+                  return matchesCategory && matchesSearch;
+                })
+                .map((scenario) => (
+                <div key={scenario.id} className="bg-slate-900 rounded-lg border border-slate-800 p-3 sm:p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h3 className="text-xs sm:text-sm font-bold text-red-400">{scenario.title}</h3>
+                    <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded whitespace-nowrap bg-slate-700/50 text-slate-300 border border-slate-600">
+                      {scenario.category}
+                    </span>
+                  </div>
                   <div className="bg-slate-800 rounded p-2 mb-2 sm:mb-3">
                     <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase mb-0.5">Symptom</div>
                     <p className="text-slate-300 text-[10px] sm:text-xs">{scenario.symptom}</p>
@@ -1368,6 +1538,34 @@ spec:
                 </div>
               ))}
             </div>
+
+            {/* No results message */}
+            {troubleshootingScenarios.filter(scenario => {
+              const matchesCategory = troubleshootingFilter === 'all' || scenario.category === troubleshootingFilter;
+              const matchesSearch = !troubleshootingSearch || 
+                scenario.title.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                scenario.symptom.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                scenario.causes.some(cause => 
+                  cause.cause.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                  cause.check.toLowerCase().includes(troubleshootingSearch.toLowerCase()) ||
+                  cause.fix.toLowerCase().includes(troubleshootingSearch.toLowerCase())
+                );
+              return matchesCategory && matchesSearch;
+            }).length === 0 && (
+              <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-700 p-6 sm:p-8 text-center">
+                <div className="text-slate-500 text-sm sm:text-base mb-2">No scenarios found</div>
+                <p className="text-slate-600 text-xs sm:text-sm mb-3">Try adjusting your search or filters</p>
+                <button
+                  onClick={() => {
+                    setTroubleshootingSearch('');
+                    setTroubleshootingFilter('all');
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs transition-colors"
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
             
             <div className="bg-slate-800 rounded-lg p-3 sm:p-4">
               <h3 className="font-bold text-xs sm:text-sm mb-2">Quick Commands</h3>
