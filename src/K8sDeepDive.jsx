@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 
 export default function K8sDeepDive() {
   const [activeView, setActiveView] = useState('architecture');
@@ -417,7 +417,8 @@ spec:
 
   // Reusable SVG Arrow component with unique marker IDs
   const Arrow = ({ id, x1, y1, x2, y2, isActive, curved = false, showPacket = false }) => {
-    const markerId = `arrow-${id}-${isActive ? 'on' : 'off'}`;
+    const uniqueId = useId();
+    const markerId = `arrow-${id}-${isActive ? 'on' : 'off'}-${uniqueId}`.replace(/:/g, '-');
     const path = curved 
       ? `M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - 30} ${x2} ${y2}`
       : `M ${x1} ${y1} L ${x2} ${y2}`;
