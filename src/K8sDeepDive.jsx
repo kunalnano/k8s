@@ -582,20 +582,20 @@ spec:
       
       {/* Header */}
       <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-2 sm:py-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-3">
             <div>
-              <h1 className="text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+              <h1 className="text-base sm:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
                 Kubernetes Internals
               </h1>
-              <p className="text-slate-500 text-xs mt-0.5">Interactive Architecture Deep Dive</p>
+              <p className="text-slate-500 text-[10px] sm:text-xs mt-0.5">Interactive Architecture Deep Dive</p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1 sm:gap-1.5">
               {views.map(view => (
                 <button
                   key={view.id}
                   onClick={() => {setActiveView(view.id); resetAll();}}
-                  className={`px-2.5 md:px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`px-2 sm:px-2.5 md:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium transition-all ${
                     activeView === view.id 
                       ? 'bg-blue-600 text-white' 
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -603,7 +603,7 @@ spec:
                   title={`Press ${view.key}`}
                 >
                   {view.label}
-                  <span className="ml-1 text-slate-500 text-[10px]">{view.key}</span>
+                  <span className="ml-0.5 sm:ml-1 text-slate-500 text-[9px] sm:text-[10px] hidden sm:inline">{view.key}</span>
                 </button>
               ))}
             </div>
@@ -611,46 +611,46 @@ spec:
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-5">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5">
         
         {/* ==================== ARCHITECTURE VIEW ==================== */}
         {activeView === 'architecture' && (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
             <div className="xl:col-span-2">
-              <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 overflow-x-auto relative">
+              <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto relative">
                 {/* Controls Row */}
-                <div className="flex flex-wrap items-center gap-3 mb-3">
-                  <h2 className="text-sm font-semibold text-slate-300">Click component →</h2>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none hover:bg-slate-800 px-2 py-1 rounded transition-colors">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
+                  <h2 className="text-xs sm:text-sm font-semibold text-slate-300">Click component →</h2>
+                  <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
                     <input type="checkbox" checked={showScaleNotes} onChange={e => setShowScaleNotes(e.target.checked)} className="rounded bg-slate-700 border-slate-600 text-blue-500 w-3 h-3" />
                     <span className="text-slate-400">Scale</span>
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none hover:bg-slate-800 px-2 py-1 rounded transition-colors">
+                  <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
                     <input type="checkbox" checked={failureMode} onChange={e => {setFailureMode(e.target.checked); setFailedComponent(null); setSelectedComponent(null);}} className="rounded bg-slate-700 border-slate-600 text-red-500 w-3 h-3" />
                     <span className="text-red-400">Failure</span>
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none hover:bg-slate-800 px-2 py-1 rounded transition-colors">
+                  <label className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs cursor-pointer select-none hover:bg-slate-800 px-1.5 sm:px-2 py-1 rounded transition-colors">
                     <input type="checkbox" checked={showYamlPanel} onChange={e => {setShowYamlPanel(e.target.checked); setSelectedYamlField(null);}} className="rounded bg-slate-700 border-slate-600 text-purple-500 w-3 h-3" />
                     <span className="text-purple-400">YAML Map</span>
                   </label>
                   <button
                     onClick={() => setTrafficSimulation(true)}
                     disabled={trafficSimulation}
-                    className="ml-auto px-2.5 py-1 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-700 text-xs font-medium rounded transition-all"
+                    className="ml-auto px-2 sm:px-2.5 py-1 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-700 text-[10px] sm:text-xs font-medium rounded transition-all"
                   >
                     {trafficSimulation ? '...' : '🚀 Simulate'}
                   </button>
                 </div>
 
                 {failureMode && (
-                  <div className="mb-3 p-2 bg-red-950/50 border border-red-900 rounded text-xs text-red-300">
+                  <div className="mb-3 p-2 bg-red-950/50 border border-red-900 rounded text-[10px] sm:text-xs text-red-300">
                     💀 Click a component to see failure impact
                   </div>
                 )}
 
                 {/* Architecture SVG - FIXED ARROW ALIGNMENT */}
-                <div className="min-w-[640px]">
-                  <svg viewBox="0 0 680 400" className="w-full h-auto">
+                <div className="min-w-[640px] lg:min-w-0">
+                  <svg viewBox="0 0 680 400" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
                     {/* Control Plane Box */}
                     <rect x={15} y={15} width={650} height={160} rx={10} fill="none" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="6 3" />
                     <text x={30} y={38} fill="#3b82f6" fontSize={12} fontWeight={700}>CONTROL PLANE</text>
@@ -736,13 +736,13 @@ spec:
 
               {/* YAML Mapping Panel */}
               {showYamlPanel && (
-                <div className="mt-4 bg-slate-900 rounded-xl border border-slate-800 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-purple-400">YAML → Component Mapping</h3>
-                    <span className="text-xs text-slate-500">Click a field to highlight which component handles it</span>
+                <div className="mt-3 sm:mt-4 bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 mb-3">
+                    <h3 className="text-xs sm:text-sm font-bold text-purple-400">YAML → Component Mapping</h3>
+                    <span className="text-[10px] sm:text-xs text-slate-500">Click a field to highlight which component handles it</span>
                   </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="bg-slate-950 rounded-lg p-3 font-mono text-xs overflow-x-auto">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="bg-slate-950 rounded-lg p-2 sm:p-3 font-mono text-[10px] sm:text-xs overflow-x-auto">
                       <pre className="text-slate-300 leading-relaxed">
                         {sampleDeploymentYaml.split('\n').map((line, i) => {
                           // Extract field name from line
@@ -781,16 +781,16 @@ spec:
                     </div>
                     <div>
                       {selectedYamlField ? (
-                        <div className="bg-purple-950/30 border border-purple-800 rounded-lg p-4">
-                          <div className="text-xs text-purple-400 uppercase tracking-wider mb-1">Field</div>
-                          <div className="font-mono text-white mb-3">{selectedYamlField}</div>
-                          <div className="text-xs text-purple-400 uppercase tracking-wider mb-1">Handled By</div>
-                          <div className="text-emerald-400 font-semibold mb-3">{componentDetails[yamlFieldMapping[selectedYamlField]?.component]?.name}</div>
-                          <div className="text-xs text-purple-400 uppercase tracking-wider mb-1">How</div>
-                          <div className="text-slate-300 text-sm">{yamlFieldMapping[selectedYamlField]?.desc}</div>
+                        <div className="bg-purple-950/30 border border-purple-800 rounded-lg p-3 sm:p-4">
+                          <div className="text-[10px] sm:text-xs text-purple-400 uppercase tracking-wider mb-1">Field</div>
+                          <div className="font-mono text-sm sm:text-base text-white mb-2 sm:mb-3">{selectedYamlField}</div>
+                          <div className="text-[10px] sm:text-xs text-purple-400 uppercase tracking-wider mb-1">Handled By</div>
+                          <div className="text-emerald-400 text-sm sm:text-base font-semibold mb-2 sm:mb-3">{componentDetails[yamlFieldMapping[selectedYamlField]?.component]?.name}</div>
+                          <div className="text-[10px] sm:text-xs text-purple-400 uppercase tracking-wider mb-1">How</div>
+                          <div className="text-slate-300 text-xs sm:text-sm">{yamlFieldMapping[selectedYamlField]?.desc}</div>
                         </div>
                       ) : (
-                        <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+                        <div className="h-full flex items-center justify-center text-slate-500 text-xs sm:text-sm">
                           ← Click a highlighted YAML field
                         </div>
                       )}
@@ -803,55 +803,55 @@ spec:
             {/* Detail Panel */}
             <div className="xl:col-span-1">
               {failedComponent && failureMode ? (
-                <div className="bg-red-950/30 rounded-xl border border-red-800 p-4 sticky top-20">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                    <h3 className="text-base font-bold text-red-400">{componentDetails[failedComponent].name} FAILURE</h3>
+                <div className="bg-red-950/30 rounded-xl border border-red-800 p-3 sm:p-4 xl:sticky xl:top-20">
+                  <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                    <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-red-500 animate-pulse" />
+                    <h3 className="text-sm sm:text-base font-bold text-red-400">{componentDetails[failedComponent].name} FAILURE</h3>
                   </div>
-                  <div className="space-y-2.5">
-                    <div className="bg-slate-900 rounded-lg p-2.5">
-                      <div className="text-[10px] text-red-400 uppercase tracking-wider mb-0.5">Symptom</div>
-                      <p className="text-white text-sm font-medium">{componentDetails[failedComponent].failure.symptom}</p>
+                  <div className="space-y-2 sm:space-y-2.5">
+                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
+                      <div className="text-[9px] sm:text-[10px] text-red-400 uppercase tracking-wider mb-0.5">Symptom</div>
+                      <p className="text-white text-xs sm:text-sm font-medium">{componentDetails[failedComponent].failure.symptom}</p>
                     </div>
-                    <div className="bg-slate-900 rounded-lg p-2.5">
-                      <div className="text-[10px] text-orange-400 uppercase tracking-wider mb-0.5">Impact</div>
-                      <p className="text-slate-300 text-xs">{componentDetails[failedComponent].failure.impact}</p>
+                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
+                      <div className="text-[9px] sm:text-[10px] text-orange-400 uppercase tracking-wider mb-0.5">Impact</div>
+                      <p className="text-slate-300 text-[10px] sm:text-xs">{componentDetails[failedComponent].failure.impact}</p>
                     </div>
-                    <div className="bg-slate-900 rounded-lg p-2.5">
-                      <div className="text-[10px] text-blue-400 uppercase tracking-wider mb-0.5">Diagnostic</div>
-                      <code className="text-[10px] text-emerald-400 block bg-slate-800 p-1.5 rounded font-mono break-all">{componentDetails[failedComponent].failure.check}</code>
+                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
+                      <div className="text-[9px] sm:text-[10px] text-blue-400 uppercase tracking-wider mb-0.5">Diagnostic</div>
+                      <code className="text-[9px] sm:text-[10px] text-emerald-400 block bg-slate-800 p-1.5 rounded font-mono break-all">{componentDetails[failedComponent].failure.check}</code>
                     </div>
-                    <div className="bg-slate-900 rounded-lg p-2.5">
-                      <div className="text-[10px] text-emerald-400 uppercase tracking-wider mb-0.5">Recovery</div>
-                      <p className="text-slate-300 text-xs">{componentDetails[failedComponent].failure.recovery}</p>
+                    <div className="bg-slate-900 rounded-lg p-2 sm:p-2.5">
+                      <div className="text-[9px] sm:text-[10px] text-emerald-400 uppercase tracking-wider mb-0.5">Recovery</div>
+                      <p className="text-slate-300 text-[10px] sm:text-xs">{componentDetails[failedComponent].failure.recovery}</p>
                     </div>
                   </div>
                 </div>
               ) : selectedComponent ? (
-                <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sticky top-20">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <h3 className="text-base font-bold text-white">{componentDetails[selectedComponent].name}</h3>
+                <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 xl:sticky xl:top-20">
+                  <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                    <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <h3 className="text-sm sm:text-base font-bold text-white">{componentDetails[selectedComponent].name}</h3>
                   </div>
-                  <div className="text-emerald-400 text-xs font-semibold mb-2">{componentDetails[selectedComponent].role}</div>
+                  <div className="text-emerald-400 text-[10px] sm:text-xs font-semibold mb-2">{componentDetails[selectedComponent].role}</div>
                   
-                  <div className="bg-slate-800 rounded-lg p-2.5 mb-3">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Analogy</div>
-                    <p className="text-slate-300 text-xs leading-relaxed">{componentDetails[selectedComponent].analogy}</p>
+                  <div className="bg-slate-800 rounded-lg p-2 sm:p-2.5 mb-2 sm:mb-3">
+                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1">Analogy</div>
+                    <p className="text-slate-300 text-[10px] sm:text-xs leading-relaxed">{componentDetails[selectedComponent].analogy}</p>
                   </div>
 
                   {showScaleNotes && (
-                    <div className="bg-amber-950/30 border border-amber-800 rounded-lg p-2 mb-3">
-                      <p className="text-amber-400 text-[10px]">{componentDetails[selectedComponent].scaleNote}</p>
+                    <div className="bg-amber-950/30 border border-amber-800 rounded-lg p-2 mb-2 sm:mb-3">
+                      <p className="text-amber-400 text-[9px] sm:text-[10px]">{componentDetails[selectedComponent].scaleNote}</p>
                     </div>
                   )}
                   
-                  <div className="mb-3">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Internals</div>
+                  <div className="mb-2 sm:mb-3">
+                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Internals</div>
                     <ul className="space-y-1">
                       {componentDetails[selectedComponent].internals.map((item, i) => (
-                        <li key={i} className="text-xs text-slate-400 flex items-start gap-1.5">
-                          <span className="text-blue-400 mt-0.5 text-[10px]">▸</span>
+                        <li key={i} className="text-[10px] sm:text-xs text-slate-400 flex items-start gap-1.5">
+                          <span className="text-blue-400 mt-0.5 text-[9px] sm:text-[10px]">▸</span>
                           <span>{item}</span>
                         </li>
                       ))}
@@ -859,14 +859,14 @@ spec:
                   </div>
                   
                   <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Data Flow</div>
-                    <p className="text-[10px] text-emerald-400 font-mono leading-relaxed">{componentDetails[selectedComponent].flow}</p>
+                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Data Flow</div>
+                    <p className="text-[9px] sm:text-[10px] text-emerald-400 font-mono leading-relaxed">{componentDetails[selectedComponent].flow}</p>
                   </div>
                 </div>
               ) : (
-                <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-700 p-6 text-center">
-                  <div className="text-slate-500 mb-1">← Select a component</div>
-                  <p className="text-slate-600 text-xs">Click any box for details</p>
+                <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-700 p-4 sm:p-6 text-center">
+                  <div className="text-slate-500 text-xs sm:text-base mb-1">← Select a component</div>
+                  <p className="text-slate-600 text-[10px] sm:text-xs">Click any box for details</p>
                 </div>
               )}
             </div>
@@ -875,23 +875,23 @@ spec:
 
         {/* ==================== FLOW VIEW - FIXED ARROWS ==================== */}
         {activeView === 'flow' && (
-          <div className="space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="space-y-3 sm:space-y-4 md:space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
               <div>
-                <h2 className="text-lg font-bold">Deployment Lifecycle</h2>
-                <p className="text-slate-500 text-xs">kubectl apply → Running Pods</p>
+                <h2 className="text-base sm:text-lg font-bold">Deployment Lifecycle</h2>
+                <p className="text-slate-500 text-[10px] sm:text-xs">kubectl apply → Running Pods</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => { setFlowStep(0); setIsFlowPlaying(true); }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium">▶ Play</button>
-                <button onClick={() => setFlowStep(s => Math.max(0, s - 1))} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs">←</button>
-                <button onClick={() => setFlowStep(s => Math.min(7, s + 1))} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs">→</button>
-                <button onClick={resetAll} className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px]">Reset</button>
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                <button onClick={() => { setFlowStep(0); setIsFlowPlaying(true); }} className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-[10px] sm:text-xs font-medium">▶ Play</button>
+                <button onClick={() => setFlowStep(s => Math.max(0, s - 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">←</button>
+                <button onClick={() => setFlowStep(s => Math.min(7, s + 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">→</button>
+                <button onClick={resetAll} className="px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[9px] sm:text-[10px]">Reset</button>
               </div>
             </div>
 
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 overflow-x-auto">
-              <div className="min-w-[680px]">
-                <svg viewBox="0 0 750 280" className="w-full h-auto">
+            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto">
+              <div className="min-w-[680px] lg:min-w-0">
+                <svg viewBox="0 0 750 280" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
                   {/* User Box */}
                   <rect x={25} y={115} width={75} height={38} rx={5} 
                     fill={flowSteps[flowStep].active.includes('user') ? '#f59e0b' : '#1e293b'} 
@@ -950,12 +950,12 @@ spec:
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-4 border-l-4 border-emerald-500">
-              <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <span className="bg-emerald-600 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">Step {flowStep + 1}/8</span>
-                <h3 className="text-sm font-semibold">{flowSteps[flowStep].label}</h3>
+            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-emerald-500">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
+                <span className="bg-emerald-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">Step {flowStep + 1}/8</span>
+                <h3 className="text-xs sm:text-sm font-semibold">{flowSteps[flowStep].label}</h3>
               </div>
-              <p className="text-slate-400 text-xs">{flowSteps[flowStep].description}</p>
+              <p className="text-slate-400 text-[10px] sm:text-xs">{flowSteps[flowStep].description}</p>
             </div>
 
             <div className="flex gap-1">
@@ -964,45 +964,45 @@ spec:
                   className={`flex-1 h-1.5 rounded-full transition-all ${i === flowStep ? 'bg-emerald-500' : i < flowStep ? 'bg-emerald-800' : 'bg-slate-700'}`} />
               ))}
             </div>
-            <p className="text-[10px] text-slate-600 text-center">← → navigate • Space play/pause</p>
+            <p className="text-[9px] sm:text-[10px] text-slate-600 text-center">← → navigate • Space play/pause</p>
           </div>
         )}
 
         {/* ==================== SCHEDULER VIEW ==================== */}
         {activeView === 'scheduler' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-lg font-bold">Scheduler Funnel</h2>
-                <button onClick={resetAll} className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 rounded">Reset</button>
+                <h2 className="text-base sm:text-lg font-bold">Scheduler Funnel</h2>
+                <button onClick={resetAll} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-xs bg-slate-800 hover:bg-slate-700 rounded">Reset</button>
               </div>
-              <p className="text-slate-500 text-xs mb-4">filter → score → bind</p>
+              <p className="text-slate-500 text-[10px] sm:text-xs mb-3 sm:mb-4">filter → score → bind</p>
               
               <div className="space-y-1.5">
                 {schedulerSteps.map((step, i) => (
                   <button key={i} onClick={() => setSchedulerStep(i)}
-                    className={`w-full text-left p-2.5 rounded-lg border transition-all ${schedulerStep === i ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
+                    className={`w-full text-left p-2 sm:p-2.5 rounded-lg border transition-all ${schedulerStep === i ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-xs">{step.label}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${step.count === 1 ? 'bg-emerald-600' : 'bg-slate-700'}`}>{step.count}</span>
+                      <span className="font-medium text-[10px] sm:text-xs">{step.label}</span>
+                      <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono ${step.count === 1 ? 'bg-emerald-600' : 'bg-slate-700'}`}>{step.count}</span>
                     </div>
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-slate-600 mt-3 text-center">↑ ↓ to navigate</p>
+              <p className="text-[9px] sm:text-[10px] text-slate-600 mt-3 text-center">↑ ↓ to navigate</p>
             </div>
             
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
-              <div className="mb-4">
-                <h3 className="text-sm font-bold mb-1">{schedulerSteps[schedulerStep].label}</h3>
-                <p className="text-slate-400 text-xs">{schedulerSteps[schedulerStep].description}</p>
-                <p className="text-slate-500 text-[10px] mt-0.5">{schedulerSteps[schedulerStep].detail}</p>
+            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4">
+              <div className="mb-3 sm:mb-4">
+                <h3 className="text-xs sm:text-sm font-bold mb-1">{schedulerSteps[schedulerStep].label}</h3>
+                <p className="text-slate-400 text-[10px] sm:text-xs">{schedulerSteps[schedulerStep].description}</p>
+                <p className="text-slate-500 text-[9px] sm:text-[10px] mt-0.5">{schedulerSteps[schedulerStep].detail}</p>
               </div>
               
               {/* Node Grid */}
-              <div className="mb-4">
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Node Pool (100)</div>
-                <div className="grid grid-cols-10 gap-1 p-2 bg-slate-800/50 rounded-lg">
+              <div className="mb-3 sm:mb-4">
+                <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Node Pool (100)</div>
+                <div className="grid grid-cols-10 gap-0.5 sm:gap-1 p-1.5 sm:p-2 bg-slate-800/50 rounded-lg">
                   {Array.from({ length: 100 }).map((_, i) => {
                     const isActive = i < schedulerSteps[schedulerStep].count;
                     const isWinner = schedulerStep === 6 && i === 0;
@@ -1011,16 +1011,16 @@ spec:
                     );
                   })}
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-500 mt-1.5">
+                <div className="flex flex-wrap justify-between gap-2 text-[9px] sm:text-[10px] text-slate-500 mt-1.5">
                   <span className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500/70 rounded-sm"></div> Eligible</span>
                   <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-900/20 rounded-sm"></div> Eliminated</span>
                   <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-sm"></div> Winner</span>
                 </div>
               </div>
               
-              <div className="p-3 bg-slate-800 rounded-lg">
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Insight</div>
-                <p className="text-slate-300 text-xs">
+              <div className="p-2.5 sm:p-3 bg-slate-800 rounded-lg">
+                <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1">Insight</div>
+                <p className="text-slate-300 text-[10px] sm:text-xs">
                   {schedulerStep < 5 ? "Filtering is elimination. Every predicate must pass." 
                     : schedulerStep === 5 ? "Anti-affinity prevents co-location with matching pods."
                     : "Scoring ranks survivors. Weighted plugins sum to final score."}
@@ -1032,10 +1032,10 @@ spec:
 
         {/* ==================== NETWORKING VIEW ==================== */}
         {activeView === 'networking' && (
-          <div className="space-y-5">
+          <div className="space-y-3 sm:space-y-4 md:space-y-5">
             <div>
-              <h2 className="text-lg font-bold mb-1">The Four Networks + Service Types</h2>
-              <p className="text-slate-500 text-xs">Every Pod gets a unique, routable IP</p>
+              <h2 className="text-base sm:text-lg font-bold mb-1">The Four Networks + Service Types</h2>
+              <p className="text-slate-500 text-[10px] sm:text-xs">Every Pod gets a unique, routable IP</p>
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -1045,61 +1045,61 @@ spec:
                 { name: 'Service Network', desc: 'Virtual IPs', color: '#a78bfa' },
                 { name: 'External', desc: 'Ingress traffic', color: '#f97316' }
               ].map((net, i) => (
-                <div key={i} className="p-2.5 rounded-lg border" style={{ borderColor: net.color + '40', backgroundColor: net.color + '10' }}>
-                  <div className="font-bold text-xs mb-0.5" style={{ color: net.color }}>{net.name}</div>
-                  <p className="text-slate-400 text-[10px]">{net.desc}</p>
+                <div key={i} className="p-2 sm:p-2.5 rounded-lg border" style={{ borderColor: net.color + '40', backgroundColor: net.color + '10' }}>
+                  <div className="font-bold text-[10px] sm:text-xs mb-0.5" style={{ color: net.color }}>{net.name}</div>
+                  <p className="text-slate-400 text-[9px] sm:text-[10px]">{net.desc}</p>
                 </div>
               ))}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
               {[
                 { type: 'ClusterIP', internal: true, external: false, desc: 'Internal only. iptables rules.', use: 'Backends, DBs' },
                 { type: 'NodePort', internal: true, external: true, desc: 'Opens 30000-32767 on all nodes.', use: 'Dev/test' },
                 { type: 'LoadBalancer', internal: true, external: true, desc: 'Cloud LB (AWS NLB/ALB).', use: 'Production' }
               ].map((svc, i) => (
-                <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-3">
+                <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-2.5 sm:p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-bold">{svc.type}</h3>
+                    <h3 className="text-xs sm:text-sm font-bold">{svc.type}</h3>
                     <div className="flex gap-1">
-                      <span className={`px-1.5 py-0.5 text-[10px] rounded ${svc.internal ? 'bg-emerald-600' : 'bg-slate-700'}`}>Int</span>
-                      <span className={`px-1.5 py-0.5 text-[10px] rounded ${svc.external ? 'bg-blue-600' : 'bg-slate-700'}`}>Ext</span>
+                      <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded ${svc.internal ? 'bg-emerald-600' : 'bg-slate-700'}`}>Int</span>
+                      <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded ${svc.external ? 'bg-blue-600' : 'bg-slate-700'}`}>Ext</span>
                     </div>
                   </div>
-                  <p className="text-slate-400 text-xs mb-1">{svc.desc}</p>
-                  <div className="text-[10px] text-slate-500">Use: {svc.use}</div>
+                  <p className="text-slate-400 text-[10px] sm:text-xs mb-1">{svc.desc}</p>
+                  <div className="text-[9px] sm:text-[10px] text-slate-500">Use: {svc.use}</div>
                 </div>
               ))}
             </div>
             
-            <div className="bg-slate-800 rounded-lg p-4 border-l-4 border-cyan-500">
-              <h3 className="font-bold text-cyan-400 text-sm mb-2">kube-proxy: iptables vs IPVS</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="font-medium text-slate-300 text-xs mb-1">iptables (Legacy)</div>
-                  <p className="text-slate-400 text-[10px]">O(n) rules. Falls over ~5000 services.</p>
+            <div className="bg-slate-800 rounded-lg p-3 sm:p-4 border-l-4 border-cyan-500">
+              <h3 className="font-bold text-cyan-400 text-xs sm:text-sm mb-2">kube-proxy: iptables vs IPVS</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                <div className="bg-slate-900 p-2.5 sm:p-3 rounded-lg">
+                  <div className="font-medium text-slate-300 text-[10px] sm:text-xs mb-1">iptables (Legacy)</div>
+                  <p className="text-slate-400 text-[9px] sm:text-[10px]">O(n) rules. Falls over ~5000 services.</p>
                 </div>
-                <div className="bg-slate-900 p-3 rounded-lg border border-cyan-500/30">
-                  <div className="font-medium text-cyan-400 text-xs mb-1">IPVS (Recommended)</div>
-                  <p className="text-slate-400 text-[10px]">O(1) hash. 100k+ services.</p>
+                <div className="bg-slate-900 p-2.5 sm:p-3 rounded-lg border border-cyan-500/30">
+                  <div className="font-medium text-cyan-400 text-[10px] sm:text-xs mb-1">IPVS (Recommended)</div>
+                  <p className="text-slate-400 text-[9px] sm:text-[10px]">O(1) hash. 100k+ services.</p>
                 </div>
               </div>
             </div>
             
             <div>
-              <h3 className="text-sm font-bold mb-2">CNI Plugins</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <h3 className="text-xs sm:text-sm font-bold mb-2">CNI Plugins</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                 {[
                   { name: 'Flannel', tag: 'Simple', desc: 'VXLAN overlay. No NetworkPolicy.', color: '#f59e0b' },
                   { name: 'Calico', tag: 'Enterprise', desc: 'BGP routing. Full policies.', color: '#ef4444' },
                   { name: 'Cilium', tag: 'eBPF', desc: 'L7 policies, observability.', color: '#8b5cf6' }
                 ].map((cni, i) => (
-                  <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-3">
+                  <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-2.5 sm:p-3">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-xs">{cni.name}</span>
-                      <span className="px-1.5 py-0.5 text-[10px] rounded" style={{ backgroundColor: cni.color + '25', color: cni.color }}>{cni.tag}</span>
+                      <span className="font-bold text-[10px] sm:text-xs">{cni.name}</span>
+                      <span className="px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded" style={{ backgroundColor: cni.color + '25', color: cni.color }}>{cni.tag}</span>
                     </div>
-                    <p className="text-slate-400 text-[10px]">{cni.desc}</p>
+                    <p className="text-slate-400 text-[9px] sm:text-[10px]">{cni.desc}</p>
                   </div>
                 ))}
               </div>
@@ -1109,22 +1109,22 @@ spec:
 
         {/* ==================== INGRESS VIEW (NEW) ==================== */}
         {activeView === 'ingress' && (
-          <div className="space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="space-y-3 sm:space-y-4 md:space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
               <div>
-                <h2 className="text-lg font-bold">Ingress Traffic Flow</h2>
-                <p className="text-slate-500 text-xs">How external HTTP(S) reaches your Pods</p>
+                <h2 className="text-base sm:text-lg font-bold">Ingress Traffic Flow</h2>
+                <p className="text-slate-500 text-[10px] sm:text-xs">How external HTTP(S) reaches your Pods</p>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setIngressStep(0); setIsIngressPlaying(true); }} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 rounded-lg text-xs font-medium">▶ Play</button>
-                <button onClick={() => setIngressStep(s => Math.max(0, s - 1))} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs">←</button>
-                <button onClick={() => setIngressStep(s => Math.min(5, s + 1))} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs">→</button>
+              <div className="flex gap-1.5 sm:gap-2">
+                <button onClick={() => { setIngressStep(0); setIsIngressPlaying(true); }} className="px-2.5 sm:px-3 py-1.5 bg-orange-600 hover:bg-orange-500 rounded-lg text-[10px] sm:text-xs font-medium">▶ Play</button>
+                <button onClick={() => setIngressStep(s => Math.max(0, s - 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">←</button>
+                <button onClick={() => setIngressStep(s => Math.min(5, s + 1))} className="px-2.5 sm:px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs">→</button>
               </div>
             </div>
 
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 overflow-x-auto">
-              <div className="min-w-[700px]">
-                <svg viewBox="0 0 750 260" className="w-full h-auto">
+            <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4 overflow-x-auto">
+              <div className="min-w-[700px] lg:min-w-0">
+                <svg viewBox="0 0 750 260" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
                   {/* Internet */}
                   <rect x={20} y={100} width={80} height={50} rx={6} fill={ingressStep === 0 ? '#f97316' : '#3f3f46'} stroke="#f97316" strokeWidth={1.5} />
                   <text x={60} y={130} textAnchor="middle" fill="#fff" fontSize={10}>Internet</text>
@@ -1181,12 +1181,12 @@ spec:
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-4 border-l-4 border-orange-500">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="bg-orange-600 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">Step {ingressStep + 1}/6</span>
-                <h3 className="text-sm font-semibold">{ingressSteps[ingressStep].label}</h3>
+            <div className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-orange-500">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
+                <span className="bg-orange-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">Step {ingressStep + 1}/6</span>
+                <h3 className="text-xs sm:text-sm font-semibold">{ingressSteps[ingressStep].label}</h3>
               </div>
-              <p className="text-slate-400 text-xs">{ingressSteps[ingressStep].description}</p>
+              <p className="text-slate-400 text-[10px] sm:text-xs">{ingressSteps[ingressStep].description}</p>
             </div>
 
             <div className="flex gap-1">
@@ -1197,14 +1197,14 @@ spec:
             </div>
 
             {/* Key Insight */}
-            <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
-              <h3 className="font-bold text-sm mb-2 text-orange-400">Key Insight: Ingress Controller ≠ kube-proxy</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div className="bg-slate-800 p-3 rounded">
+            <div className="bg-slate-900 rounded-lg p-3 sm:p-4 border border-slate-800">
+              <h3 className="font-bold text-xs sm:text-sm mb-2 text-orange-400">Key Insight: Ingress Controller ≠ kube-proxy</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 text-[10px] sm:text-xs">
+                <div className="bg-slate-800 p-2.5 sm:p-3 rounded">
                   <div className="text-purple-400 font-semibold mb-1">Ingress Controller</div>
                   <p className="text-slate-400">L7 proxy (HTTP). Reads Ingress resources from API server. Routes by Host/Path headers. Connects directly to Pod IPs.</p>
                 </div>
-                <div className="bg-slate-800 p-3 rounded">
+                <div className="bg-slate-800 p-2.5 sm:p-3 rounded">
                   <div className="text-blue-400 font-semibold mb-1">kube-proxy</div>
                   <p className="text-slate-400">L4 (TCP/UDP). Programs iptables/IPVS on every node. Routes ClusterIP → Pod IPs. No HTTP awareness.</p>
                 </div>
@@ -1215,29 +1215,29 @@ spec:
 
         {/* ==================== TROUBLESHOOTING VIEW ==================== */}
         {activeView === 'troubleshooting' && (
-          <div className="space-y-5">
+          <div className="space-y-3 sm:space-y-4 md:space-y-5">
             <div>
-              <h2 className="text-lg font-bold mb-1">Troubleshooting Decision Trees</h2>
-              <p className="text-slate-500 text-xs">Common failures and diagnostics</p>
+              <h2 className="text-base sm:text-lg font-bold mb-1">Troubleshooting Decision Trees</h2>
+              <p className="text-slate-500 text-[10px] sm:text-xs">Common failures and diagnostics</p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {troubleshootingScenarios.map((scenario, i) => (
-                <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-4">
-                  <h3 className="text-sm font-bold text-red-400 mb-2">{scenario.title}</h3>
-                  <div className="bg-slate-800 rounded p-2 mb-3">
-                    <div className="text-[10px] text-slate-500 uppercase mb-0.5">Symptom</div>
-                    <p className="text-slate-300 text-xs">{scenario.symptom}</p>
+                <div key={i} className="bg-slate-900 rounded-lg border border-slate-800 p-3 sm:p-4">
+                  <h3 className="text-xs sm:text-sm font-bold text-red-400 mb-2">{scenario.title}</h3>
+                  <div className="bg-slate-800 rounded p-2 mb-2 sm:mb-3">
+                    <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase mb-0.5">Symptom</div>
+                    <p className="text-slate-300 text-[10px] sm:text-xs">{scenario.symptom}</p>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5 sm:space-y-2">
                     {scenario.causes.map((cause, j) => (
                       <div key={j} className="border-l-2 border-slate-700 pl-2">
-                        <div className="text-xs font-medium text-white mb-0.5">{cause.cause}</div>
-                        <div className="text-[10px] text-slate-400 mb-0.5">
+                        <div className="text-[10px] sm:text-xs font-medium text-white mb-0.5">{cause.cause}</div>
+                        <div className="text-[9px] sm:text-[10px] text-slate-400 mb-0.5">
                           <span className="text-blue-400">Check: </span>
-                          <code className="bg-slate-800 px-1 rounded">{cause.check}</code>
+                          <code className="bg-slate-800 px-1 rounded break-all">{cause.check}</code>
                         </div>
-                        <div className="text-[10px]">
+                        <div className="text-[9px] sm:text-[10px]">
                           <span className="text-slate-500">Fix: </span>
                           <span className="text-emerald-400">{cause.fix}</span>
                         </div>
@@ -1248,18 +1248,18 @@ spec:
               ))}
             </div>
             
-            <div className="bg-slate-800 rounded-lg p-4">
-              <h3 className="font-bold text-sm mb-2">Quick Commands</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] font-mono">
+            <div className="bg-slate-800 rounded-lg p-3 sm:p-4">
+              <h3 className="font-bold text-xs sm:text-sm mb-2">Quick Commands</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[9px] sm:text-[10px] font-mono">
                 <div className="space-y-1">
-                  <div><span className="text-emerald-400">kubectl describe pod &lt;name&gt;</span> <span className="text-slate-500">- Events</span></div>
-                  <div><span className="text-emerald-400">kubectl logs &lt;pod&gt; --previous</span> <span className="text-slate-500">- Crash logs</span></div>
-                  <div><span className="text-emerald-400">kubectl get events --sort-by='.lastTimestamp'</span></div>
+                  <div className="break-all"><span className="text-emerald-400">kubectl describe pod &lt;name&gt;</span> <span className="text-slate-500">- Events</span></div>
+                  <div className="break-all"><span className="text-emerald-400">kubectl logs &lt;pod&gt; --previous</span> <span className="text-slate-500">- Crash logs</span></div>
+                  <div className="break-all"><span className="text-emerald-400">kubectl get events --sort-by='.lastTimestamp'</span></div>
                 </div>
                 <div className="space-y-1">
-                  <div><span className="text-emerald-400">kubectl get endpoints &lt;svc&gt;</span> <span className="text-slate-500">- Service targets</span></div>
-                  <div><span className="text-emerald-400">kubectl exec -it &lt;pod&gt; -- nslookup kubernetes</span></div>
-                  <div><span className="text-emerald-400">kubectl top nodes</span> <span className="text-slate-500">- Resources</span></div>
+                  <div className="break-all"><span className="text-emerald-400">kubectl get endpoints &lt;svc&gt;</span> <span className="text-slate-500">- Service targets</span></div>
+                  <div className="break-all"><span className="text-emerald-400">kubectl exec -it &lt;pod&gt; -- nslookup kubernetes</span></div>
+                  <div className="break-all"><span className="text-emerald-400">kubectl top nodes</span> <span className="text-slate-500">- Resources</span></div>
                 </div>
               </div>
             </div>
@@ -1269,19 +1269,19 @@ spec:
         {/* ==================== QUIZ VIEW ==================== */}
         {activeView === 'quiz' && (
           <div className="max-w-xl mx-auto">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-bold mb-1">Knowledge Check</h2>
-              <p className="text-slate-400 text-xs">Test your K8s internals understanding</p>
+            <div className="text-center mb-4 sm:mb-6">
+              <h2 className="text-lg sm:text-xl font-bold mb-1">Knowledge Check</h2>
+              <p className="text-slate-400 text-[10px] sm:text-xs">Test your K8s internals understanding</p>
             </div>
 
             {!showQuizResult ? (
-              <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Q {currentQuestion + 1}/{quizQuestions.length}</span>
-                  <span className="text-xs font-bold text-emerald-500">Score: {quizScore}</span>
+              <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6">
+                <div className="flex justify-between items-center mb-3 sm:mb-4">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">Q {currentQuestion + 1}/{quizQuestions.length}</span>
+                  <span className="text-[10px] sm:text-xs font-bold text-emerald-500">Score: {quizScore}</span>
                 </div>
                 
-                <h3 className="text-base font-bold mb-5">{quizQuestions[currentQuestion].q}</h3>
+                <h3 className="text-sm sm:text-base font-bold mb-4 sm:mb-5">{quizQuestions[currentQuestion].q}</h3>
                 
                 <div className="space-y-2">
                   {quizQuestions[currentQuestion].options.map((option, index) => {
@@ -1298,7 +1298,7 @@ spec:
 
                     return (
                       <button key={index} onClick={() => !showCorrectness && handleQuizAnswer(index)} disabled={showCorrectness}
-                        className={`w-full text-left p-3 rounded-lg border border-transparent transition-all text-sm ${bgClass}`}>
+                        className={`w-full text-left p-2.5 sm:p-3 rounded-lg border border-transparent transition-all text-xs sm:text-sm ${bgClass}`}>
                         <div className="flex items-center justify-between">
                           <span>{option}</span>
                           {showCorrectness && isCorrect && <span className="text-emerald-500">✓</span>}
@@ -1310,14 +1310,14 @@ spec:
                 </div>
               </div>
             ) : (
-              <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 text-center">
-                <div className="text-5xl mb-3">🏆</div>
-                <h3 className="text-xl font-bold mb-1">Complete!</h3>
-                <p className="text-slate-400 mb-4">Score: <span className="text-emerald-400 font-bold">{quizScore}</span> / {quizQuestions.length}</p>
-                <div className="w-full bg-slate-800 rounded-full h-3 mb-5 overflow-hidden">
+              <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 sm:p-6 text-center">
+                <div className="text-4xl sm:text-5xl mb-3">🏆</div>
+                <h3 className="text-lg sm:text-xl font-bold mb-1">Complete!</h3>
+                <p className="text-slate-400 text-xs sm:text-base mb-3 sm:mb-4">Score: <span className="text-emerald-400 font-bold">{quizScore}</span> / {quizQuestions.length}</p>
+                <div className="w-full bg-slate-800 rounded-full h-2.5 sm:h-3 mb-4 sm:mb-5 overflow-hidden">
                   <div className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all" style={{ width: `${(quizScore / quizQuestions.length) * 100}%` }} />
                 </div>
-                <button onClick={restartQuiz} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-sm">Try Again</button>
+                <button onClick={restartQuiz} className="px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-xs sm:text-sm">Try Again</button>
               </div>
             )}
           </div>
@@ -1325,8 +1325,8 @@ spec:
       </div>
       
       {/* Footer */}
-      <div className="border-t border-slate-800 bg-slate-900/50 py-2 mt-6">
-        <div className="max-w-7xl mx-auto px-4 text-center text-[10px] text-slate-600">
+      <div className="border-t border-slate-800 bg-slate-900/50 py-2 mt-4 sm:mt-6">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 text-center text-[9px] sm:text-[10px] text-slate-600">
           1-7 switch views • ← → navigate • Space play • Esc clear
         </div>
       </div>
