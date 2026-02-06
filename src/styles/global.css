@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+@theme {
+  --color-k8s-blue: #326ce5;
+  --color-k8s-light: #54a1e8;
+  --color-k8s-dark: #0f172a;
+  --color-k8s-darker: #020617;
+  --color-control-plane: #3b82f6;
+  --color-worker-node: #10b981;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-k8s-blue);
+  outline-offset: 2px;
+}
+
+/* ── Smooth ring-pulse (replaces crude animate-pulse) ── */
+@keyframes ring-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.6);
+  }
+}
+.animate-ring-pulse {
+  animation: ring-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Glow breathing for active SVG elements ── */
+@keyframes glow-breathe {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 3px currentColor);
+  }
+  50% {
+    filter: drop-shadow(0 0 10px currentColor);
+  }
+}
+.animate-glow-breathe {
+  animation: glow-breathe 2.5s ease-in-out infinite;
+}
+
+/* ── Fade-in-up for panels / cards ── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Fade-in for general appearance ── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+/* ── Slide-in from right for detail panels ── */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Scale pop for winners / celebrations ── */
+@keyframes scale-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.animate-scale-pop {
+  animation: scale-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Staggered children (used with inline --delay) ── */
+@keyframes stagger-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-stagger {
+  animation: stagger-fade 0.3s ease-out both;
+  animation-delay: var(--stagger-delay, 0ms);
+}
+
+/* ── SVG dash animation for active arrows ── */
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+.animate-dash-flow {
+  animation: dash-flow 0.6s linear infinite;
+}
+
+/* ── Shimmer sweep for progress bars ── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* ── Page entrance ── */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+main {
+  animation: page-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Smooth SVG transitions ── */
+svg rect,
+svg circle,
+svg path,
+svg text {
+  transition:
+    fill 0.3s ease,
+    stroke 0.3s ease,
+    opacity 0.3s ease,
+    stroke-width 0.2s ease;
+}
+
+/* ── Component node hover glow ── */
+.component-node-group {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.component-node-group:hover {
+  transform: scale(1.04);
+}
+.component-node-group:hover .node-glow-rect {
+  opacity: 1;
+}
+.node-glow-rect {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* ── Button hover micro-interactions ── */
+button {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}

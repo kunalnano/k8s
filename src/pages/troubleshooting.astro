@@ -1,0 +1,15 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SmartTroubleshooter from '../components/react/SmartTroubleshooter';
+import TroubleshootingSearch from '../components/react/TroubleshootingSearch';
+---
+<BaseLayout title="Troubleshooting">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-2 text-white">Troubleshooting Decision Trees</h1>
+    <p class="text-slate-400 mb-6">Search common issues or use AI to diagnose your problem.</p>
+    <SmartTroubleshooter client:load />
+    <div class="mt-8">
+      <TroubleshootingSearch client:load />
+    </div>
+  </div>
+</BaseLayout>

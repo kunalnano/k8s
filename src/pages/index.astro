@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ArchitectureDiagram from '../components/react/ArchitectureDiagram';
+---
+<BaseLayout title="Architecture">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <ArchitectureDiagram client:load />
+  </div>
+</BaseLayout>

@@ -1,0 +1,92 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { networkTypes, serviceTypes, cniPlugins, kubeProxyModes } from '../data/networking';
+---
+<BaseLayout title="Networking" description="The four Kubernetes networks, service types, kube-proxy modes, and CNI plugins explained">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="space-y-6 sm:space-y-8">
+
+      {/* Title */}
+      <div>
+        <h1 class="text-3xl font-bold mb-2 text-white">The Four Networks + Service Types</h1>
+        <p class="text-slate-400">Every Pod gets a unique, routable IP. Here's how the networking layers stack up.</p>
+      </div>
+
+      {/* Network Type Cards */}
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+        {networkTypes.map((net) => (
+          <div
+            class="p-3 sm:p-4 rounded-lg border"
+            style={`border-color: ${net.color}40; background-color: ${net.color}10;`}
+          >
+            <div class="font-bold text-xs sm:text-sm mb-1" style={`color: ${net.color};`}>
+              {net.name}
+            </div>
+            <p class="text-slate-400 text-[10px] sm:text-xs">{net.description}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Service Type Cards */}
+      <div>
+        <h2 class="text-lg sm:text-xl font-bold mb-3 text-white">Service Types</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+          {serviceTypes.map((svc) => (
+            <div class="bg-slate-900 rounded-lg border border-slate-800 p-3 sm:p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm sm:text-base font-bold text-white">{svc.name}</h3>
+              </div>
+              <p class="text-slate-400 text-xs sm:text-sm mb-1.5">{svc.description}</p>
+              <div class="text-[10px] sm:text-xs text-slate-500">
+                Use: {svc.details}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* kube-proxy Comparison */}
+      <div class="bg-slate-800 rounded-lg p-4 sm:p-5 border-l-4 border-cyan-500">
+        <h2 class="font-bold text-cyan-400 text-sm sm:text-base mb-3">kube-proxy: iptables vs IPVS</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+          {kubeProxyModes.map((mode) => (
+            <div class:list={[
+              "bg-slate-900 p-3 sm:p-4 rounded-lg",
+              mode.recommended && "border border-cyan-500/30"
+            ]}>
+              <div class:list={[
+                "font-medium text-xs sm:text-sm mb-1",
+                mode.recommended ? "text-cyan-400" : "text-slate-300"
+              ]}>
+                {mode.name}
+              </div>
+              <p class="text-slate-400 text-[10px] sm:text-xs">{mode.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CNI Plugins */}
+      <div>
+        <h2 class="text-lg sm:text-xl font-bold mb-3 text-white">CNI Plugins</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+          {cniPlugins.map((cni) => (
+            <div class="bg-slate-900 rounded-lg border border-slate-800 p-3 sm:p-4">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="font-bold text-xs sm:text-sm text-white">{cni.name}</span>
+                <span
+                  class="px-2 py-0.5 text-[10px] sm:text-xs rounded"
+                  style={`background-color: ${cni.features[1]}25; color: ${cni.features[1]};`}
+                >
+                  {cni.features[0]}
+                </span>
+              </div>
+              <p class="text-slate-400 text-[10px] sm:text-xs">{cni.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</BaseLayout>

@@ -1,0 +1,16 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import IngressFlow from '../components/react/IngressFlow';
+---
+<BaseLayout title="Ingress Traffic Flow" description="Interactive visualization of how external HTTP traffic reaches your Kubernetes pods through Ingress Controllers">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-2 text-white">Ingress Traffic Flow</h1>
+    <p class="text-slate-400 mb-6">
+      Follow an external HTTP request as it passes through the Cloud Load Balancer, Ingress Controller,
+      Service resolution, and finally reaches a Pod&mdash;bypassing kube-proxy entirely at L7.
+    </p>
+    <div class="bg-slate-800/50 rounded-xl p-4 sm:p-6">
+      <IngressFlow client:load />
+    </div>
+  </div>
+</BaseLayout>

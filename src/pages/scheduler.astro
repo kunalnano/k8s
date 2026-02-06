@@ -1,0 +1,16 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SchedulerFunnel from '../components/react/SchedulerFunnel';
+---
+<BaseLayout title="Scheduler Deep Dive" description="Interactive visualization of the Kubernetes scheduler filtering and scoring pipeline">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-2 text-white">Scheduler Deep Dive</h1>
+    <p class="text-slate-400 mb-6">
+      Watch 100 candidate nodes get filtered down to a single winner. Each stage eliminates nodes that don't meet
+      requirements&mdash;from label selectors to resource capacity to anti-affinity rules.
+    </p>
+    <div class="bg-slate-800/50 rounded-xl p-4 sm:p-6">
+      <SchedulerFunnel client:load />
+    </div>
+  </div>
+</BaseLayout>

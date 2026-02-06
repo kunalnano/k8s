@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Quiz from '../components/react/Quiz';
+---
+<BaseLayout title="Knowledge Check">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <Quiz client:load />
+  </div>
+</BaseLayout>

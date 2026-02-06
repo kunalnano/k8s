@@ -1,0 +1,16 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FlowDiagram from '../components/react/FlowDiagram';
+---
+<BaseLayout title="Deployment Flow" description="Interactive walkthrough of the Kubernetes deployment lifecycle from kubectl apply to running pods">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-2 text-white">Deployment Flow</h1>
+    <p class="text-slate-400 mb-6">
+      Trace a deployment from <code class="text-emerald-400 bg-slate-800 px-1.5 py-0.5 rounded text-sm">kubectl apply</code> through
+      the API Server, Controllers, Scheduler, and Kubelet until your Pod is running and ready to serve traffic.
+    </p>
+    <div class="bg-slate-800/50 rounded-xl p-4 sm:p-6">
+      <FlowDiagram client:load />
+    </div>
+  </div>
+</BaseLayout>

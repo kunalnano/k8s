@@ -1,0 +1,63 @@
+---
+import '../styles/global.css';
+import Header from '../components/astro/Header.astro';
+import Footer from '../components/astro/Footer.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'Interactive Kubernetes architecture deep dive',
+} = Astro.props;
+
+const pageTitle = `${title} | K8s Internals`;
+---
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content={description} />
+  <meta property="og:title" content={pageTitle} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <title>{pageTitle}</title>
+</head>
+<body class="bg-k8s-darker text-slate-100 min-h-screen flex flex-col">
+  <Header />
+  <main class="flex-1">
+    <slot />
+  </main>
+  <Footer />
+  <script is:inline>
+    document.addEventListener('keydown', function (e) {
+      const tag = (e.target || e.srcElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'Escape') {
+        document.dispatchEvent(new CustomEvent('k8s:escape'));
+        return;
+      }
+
+      const base = window.location.pathname.includes('/k8s/') ? '/k8s' : '';
+      const routes = {
+        '1': '/',
+        '2': '/flow/',
+        '3': '/scheduler/',
+        '4': '/networking/',
+        '5': '/ingress/',
+        '6': '/troubleshooting/',
+        '7': '/quiz/',
+      };
+
+      if (routes[e.key]) {
+        window.location.href = base + routes[e.key];
+      }
+    });
+  </script>
+</body>
+</html>

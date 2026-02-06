@@ -1,0 +1,54 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+const pages = [
+  { label: 'Architecture', shortcut: '1', href: `${base}/` },
+  { label: 'Flow', shortcut: '2', href: `${base}/flow/` },
+  { label: 'Scheduler', shortcut: '3', href: `${base}/scheduler/` },
+  { label: 'Networking', shortcut: '4', href: `${base}/networking/` },
+  { label: 'Ingress', shortcut: '5', href: `${base}/ingress/` },
+  { label: 'Troubleshooting', shortcut: '6', href: `${base}/troubleshooting/` },
+  { label: 'Quiz', shortcut: '7', href: `${base}/quiz/` },
+];
+
+const currentPath = Astro.url.pathname;
+
+function isActive(href: string): boolean {
+  const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
+  const normalizedHref = href.replace(/\/$/, '') || '/';
+  return normalizedCurrent === normalizedHref;
+}
+---
+
+<nav aria-label="Main navigation" class="overflow-x-auto scrollbar-none">
+  <ul class="flex gap-1 min-w-max px-4 sm:px-0" role="tablist">
+    {pages.map((page) => {
+      const active = isActive(page.href);
+      return (
+        <li role="presentation">
+          <a
+            href={page.href}
+            role="tab"
+            aria-selected={active ? 'true' : 'false'}
+            class:list={[
+              'flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors whitespace-nowrap',
+              active
+                ? 'bg-k8s-blue text-white'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50',
+            ]}
+          >
+            {page.label}
+            <kbd class:list={[
+              'text-xs px-1.5 py-0.5 rounded font-mono',
+              active
+                ? 'bg-white/20 text-white/80'
+                : 'bg-slate-800 text-slate-500',
+            ]}>
+              {page.shortcut}
+            </kbd>
+          </a>
+        </li>
+      );
+    })}
+  </ul>
+</nav>
