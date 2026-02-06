@@ -3,11 +3,11 @@ import react from '@astrojs/react';
 import mdx from '@astrojs/mdx';
 import tailwindcss from '@tailwindcss/vite';
 
-const isContainer = process.env.DEPLOY_TARGET === 'container';
+const isGitHubPages = !process.env.VERCEL && process.env.DEPLOY_TARGET !== 'container';
 
 export default defineConfig({
-  site: isContainer ? 'http://localhost:8080' : 'https://kunalnano.github.io',
-  base: isContainer ? '/' : '/k8s',
+  site: isGitHubPages ? 'https://kunalnano.github.io' : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8080'),
+  base: isGitHubPages ? '/k8s' : '/',
   integrations: [react(), mdx()],
   vite: {
     plugins: [tailwindcss()],
