@@ -64,7 +64,10 @@ export default function K8sDeepDive() {
     setFailedComponent(null);
     setTrafficSimulation(false);
     setSelectedYamlField(null);
-  }, []);
+    setTroubleshootingSearch('');
+    setTroubleshootingFilter('all');
+    clearAiResponse();
+  }, [clearAiResponse]);
 
   // ==================== AI INTEGRATION ====================
   
@@ -1637,12 +1640,12 @@ spec:
             {/* Summary Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
               {[
-                { label: 'Total', count: troubleshootingScenarios.length, color: 'white', bg: 'slate' },
-                { label: 'Scheduling', count: troubleshootingScenarios.filter(s => s.category === 'scheduling').length, color: 'blue' },
-                { label: 'Runtime', count: troubleshootingScenarios.filter(s => s.category === 'runtime').length, color: 'purple' },
-                { label: 'Storage', count: troubleshootingScenarios.filter(s => s.category === 'storage').length, color: 'emerald' },
-                { label: 'Resources', count: troubleshootingScenarios.filter(s => s.category === 'resources').length, color: 'amber' },
-                { label: 'Networking', count: troubleshootingScenarios.filter(s => s.category === 'networking').length, color: 'orange' },
+                { label: 'Total', count: troubleshootingScenarios.length, colorClass: 'text-white' },
+                { label: 'Scheduling', count: troubleshootingScenarios.filter(s => s.category === 'scheduling').length, colorClass: 'text-blue-400' },
+                { label: 'Runtime', count: troubleshootingScenarios.filter(s => s.category === 'runtime').length, colorClass: 'text-purple-400' },
+                { label: 'Storage', count: troubleshootingScenarios.filter(s => s.category === 'storage').length, colorClass: 'text-emerald-400' },
+                { label: 'Resources', count: troubleshootingScenarios.filter(s => s.category === 'resources').length, colorClass: 'text-amber-400' },
+                { label: 'Networking', count: troubleshootingScenarios.filter(s => s.category === 'networking').length, colorClass: 'text-orange-400' },
               ].map((stat, i) => (
                 <button
                   key={i}
@@ -1655,7 +1658,7 @@ spec:
                   }`}
                   aria-label={`Show ${stat.label} scenarios`}
                 >
-                  <div className={`text-lg sm:text-xl font-bold text-${stat.color || stat.bg}-400`}>{stat.count}</div>
+                  <div className={`text-lg sm:text-xl font-bold ${stat.colorClass}`}>{stat.count}</div>
                   <div className="text-[10px] sm:text-xs text-slate-400">{stat.label}</div>
                 </button>
               ))}
