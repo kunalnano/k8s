@@ -66,8 +66,9 @@ export default function K8sDeepDive() {
     setSelectedYamlField(null);
     setTroubleshootingSearch('');
     setTroubleshootingFilter('all');
-    clearAiResponse();
-  }, [clearAiResponse]);
+    setAiResponse(null);
+    setAiError(null);
+  }, []);
 
   // ==================== AI INTEGRATION ====================
   
