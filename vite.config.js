@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/k8s/',  // Required for GitHub Pages - matches repo name
+  base: '/', // Use absolute paths for Vercel/Cloudflare Pages deployment
 })
