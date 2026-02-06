@@ -701,25 +701,28 @@ spec:
   };
 
   // Reusable SVG Arrow component with unique marker IDs
-  const Arrow = ({ id, x1, y1, x2, y2, isActive, curved = false, showPacket = false }) => {
+  const Arrow = ({ id, x1, y1, x2, y2, isActive, curved = false, curveOffset = 40, showPacket = false, customPath }) => {
     const uniqueId = useId();
     const markerId = `arrow-${id}-${isActive ? 'on' : 'off'}-${uniqueId}`.replace(/:/g, '-');
-    const path = curved 
-      ? `M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - 30} ${x2} ${y2}`
-      : `M ${x1} ${y1} L ${x2} ${y2}`;
+    const path = customPath
+      ? customPath
+      : curved
+        ? `M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - curveOffset} ${x2} ${y2}`
+        : `M ${x1} ${y1} L ${x2} ${y2}`;
+    const color = isActive ? '#22c55e' : '#64748b';
     
     return (
       <g>
         <defs>
-          <marker id={markerId} markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill={isActive ? '#22c55e' : '#475569'} />
+          <marker id={markerId} markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+            <polygon points="0 0, 12 4, 0 8" fill={color} />
           </marker>
         </defs>
         <path
           d={path}
           fill="none"
-          stroke={isActive ? '#22c55e' : '#475569'}
-          strokeWidth={isActive ? 2.5 : 1.5}
+          stroke={color}
+          strokeWidth={isActive ? 2.5 : 2}
           markerEnd={`url(#${markerId})`}
           strokeDasharray={isActive ? '6 3' : 'none'}
           className={isActive ? 'animate-pulse' : ''}
@@ -928,10 +931,13 @@ spec:
                       isYamlHighlight={yamlHighlightedComponent === 'controller'}
                       showScale={showScaleNotes} />
                     
-                    {/* Control Plane Arrows - FIXED */}
-                    <Arrow id="api-etcd" x1={160} y1={85} x2={188} y2={85} />
-                    <Arrow id="api-sched" x1={100} y1={112} x2={340} y2={85} curved />
-                    <Arrow id="api-ctrl" x1={100} y1={115} x2={490} y2={85} curved />
+                    {/* Control Plane Arrows */}
+                    {/* API Server → etcd: straight horizontal */}
+                    <Arrow id="api-etcd" x1={162} y1={85} x2={188} y2={85} />
+                    {/* API Server → Scheduler: arc above etcd */}
+                    <Arrow id="api-sched" x1={160} y1={72} x2={340} y2={72} curved curveOffset={50} />
+                    {/* API Server → Controllers: higher arc above all */}
+                    <Arrow id="api-ctrl" x1={155} y1={62} x2={490} y2={62} curved curveOffset={55} />
                     
                     {/* Worker Node Box */}
                     <rect x={15} y={210} width={650} height={175} rx={10} fill="none" stroke="#10b981" strokeWidth={1.5} strokeDasharray="6 3" />
@@ -964,11 +970,15 @@ spec:
                     <rect x={545} y={278} width={32} height={32} rx={4} fill="#0f172a" stroke="#10b981" strokeWidth={1} />
                     <rect x={585} y={278} width={32} height={32} rx={4} fill="#0f172a" stroke="#10b981" strokeWidth={1} />
                     
-                    {/* Cross-plane Arrows - FIXED */}
-                    <Arrow id="api-kubelet" x1={100} y1={175} x2={100} y2={253} />
-                    <Arrow id="api-proxy" x1={250} y1={175} x2={250} y2={253} />
-                    <Arrow id="kubelet-runtime" x1={160} y1={280} x2={338} y2={280} />
-                    <Arrow id="runtime-pods" x1={460} y1={294} x2={488} y2={294} />
+                    {/* Cross-plane Arrows */}
+                    {/* API Server → kubelet: straight down */}
+                    <Arrow id="api-kubelet" x1={100} y1={112} x2={100} y2={253} />
+                    {/* API Server → kube-proxy: angled from API Server (not etcd) */}
+                    <Arrow id="api-proxy" customPath="M 145 112 L 250 253" />
+                    {/* kubelet → containerd: route below kube-proxy */}
+                    <Arrow id="kubelet-runtime" customPath="M 160 300 L 188 320 L 340 320 L 340 300" />
+                    {/* containerd → pods */}
+                    <Arrow id="runtime-pods" x1={462} y1={285} x2={488} y2={285} />
 
                     {/* Traffic Simulation Packet */}
                     {trafficSimulation && (
