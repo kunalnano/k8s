@@ -220,7 +220,7 @@ export default function SmartTroubleshooter() {
 
       {/* Loading state */}
       {isLoading && (
-        <div className="mt-4 flex items-center gap-3 text-slate-400 text-sm">
+        <div className="mt-4 flex items-center gap-3 text-slate-400 text-sm animate-fade-in">
           <svg
             className="animate-spin h-5 w-5 text-blue-400"
             viewBox="0 0 24 24"
@@ -246,7 +246,7 @@ export default function SmartTroubleshooter() {
 
       {/* Error display */}
       {error && (
-        <div className="mt-4 p-4 bg-red-900/30 border border-red-700 rounded-lg">
+        <div className="mt-4 p-4 bg-red-900/30 border border-red-700 rounded-lg animate-fade-in-up">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-semibold text-red-400">Error</span>
             <button
@@ -263,7 +263,7 @@ export default function SmartTroubleshooter() {
 
       {/* Response display */}
       {response && (
-        <div className="mt-4 p-4 bg-slate-900/80 border border-purple-700/50 rounded-lg">
+        <div className="mt-4 p-4 bg-slate-900/80 border border-purple-700/50 rounded-lg animate-fade-in-up">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-purple-400">
               AI Diagnosis

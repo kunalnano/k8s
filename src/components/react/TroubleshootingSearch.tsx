@@ -194,7 +194,7 @@ export default function TroubleshootingSearch() {
                 </div>
 
                 {isExpanded && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 animate-fade-in-up">
                     {scenario.causes.map((cause, j) => (
                       <div key={j} className="border-l-2 border-slate-700 pl-3">
                         <div className="text-xs font-medium text-white mb-0.5">

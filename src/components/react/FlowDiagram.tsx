@@ -2,9 +2,98 @@ import { useState, useEffect, useCallback } from "react";
 import { flowSteps } from "../../data/flow-steps";
 import Arrow from "./architecture/Arrow";
 
+// All arrows defined upfront - always rendered, opacity controlled by step
+const arrowConfigs = [
+  {
+    id: "f0",
+    x1: 100,
+    y1: 134,
+    x2: 148,
+    y2: 78,
+    appearsAt: 0,
+    activeSteps: [0],
+    packetStep: 0,
+  },
+  {
+    id: "f1",
+    x1: 197,
+    y1: 90,
+    x2: 197,
+    y2: 163,
+    appearsAt: 1,
+    activeSteps: [1],
+    packetStep: 1,
+  },
+  {
+    id: "f2",
+    x1: 247,
+    y1: 69,
+    x2: 288,
+    y2: 69,
+    appearsAt: 2,
+    activeSteps: [2],
+    packetStep: 2,
+  },
+  {
+    id: "f3",
+    x1: 387,
+    y1: 69,
+    x2: 428,
+    y2: 69,
+    appearsAt: 3,
+    activeSteps: [3, 4],
+    packetStep: 4,
+  },
+  {
+    id: "f5",
+    x1: 477,
+    y1: 90,
+    x2: 477,
+    y2: 163,
+    appearsAt: 5,
+    activeSteps: [5],
+    packetStep: 5,
+  },
+  {
+    id: "f6",
+    x1: 527,
+    y1: 184,
+    x2: 568,
+    y2: 184,
+    appearsAt: 6,
+    activeSteps: [6],
+    packetStep: 6,
+  },
+  {
+    id: "f7",
+    x1: 527,
+    y1: 205,
+    x2: 568,
+    y2: 240,
+    appearsAt: 7,
+    activeSteps: [7],
+    packetStep: 7,
+  },
+];
+
+// Component boxes for glow ring overlays
+const boxes = [
+  { id: "user", x: 25, y: 115, w: 75, h: 38, color: "#f59e0b" },
+  { id: "apiserver", x: 150, y: 50, w: 95, h: 38, color: "#3b82f6" },
+  { id: "controller", x: 290, y: 50, w: 95, h: 38, color: "#8b5cf6" },
+  { id: "scheduler", x: 430, y: 50, w: 95, h: 38, color: "#ec4899" },
+  { id: "kubelet", x: 430, y: 165, w: 95, h: 38, color: "#10b981" },
+  { id: "runtime", x: 570, y: 165, w: 95, h: 38, color: "#06b6d4" },
+  { id: "kubeproxy", x: 570, y: 230, w: 95, h: 38, color: "#f97316" },
+];
+
 export default function FlowDiagram() {
   const [flowStep, setFlowStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Smooth description transitions: fade out old, swap, fade in new
+  const [displayedStep, setDisplayedStep] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
 
   const maxStep = flowSteps.length - 1;
 
@@ -13,11 +102,6 @@ export default function FlowDiagram() {
     [maxStep],
   );
   const prev = useCallback(() => setFlowStep((s) => Math.max(0, s - 1)), []);
-  const togglePlay = useCallback(() => setIsPlaying((p) => !p), []);
-  const reset = useCallback(() => {
-    setFlowStep(0);
-    setIsPlaying(false);
-  }, []);
 
   // Auto-advance when playing
   useEffect(() => {
@@ -30,9 +114,21 @@ export default function FlowDiagram() {
         }
         return s + 1;
       });
-    }, 1800);
+    }, 2200);
     return () => clearInterval(timer);
   }, [isPlaying, maxStep]);
+
+  // Description crossfade: brief fade-out, swap content, fade-in
+  useEffect(() => {
+    if (flowStep !== displayedStep) {
+      setTransitioning(true);
+      const timer = setTimeout(() => {
+        setDisplayedStep(flowStep);
+        setTransitioning(false);
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [flowStep, displayedStep]);
 
   // Keyboard handling
   useEffect(() => {
@@ -47,14 +143,23 @@ export default function FlowDiagram() {
       }
       if (e.key === " ") {
         e.preventDefault();
-        togglePlay();
+        if (isPlaying) {
+          setIsPlaying(false);
+        } else {
+          setFlowStep((s) => {
+            if (s >= maxStep) return 0;
+            return s;
+          });
+          setIsPlaying(true);
+        }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [next, prev, togglePlay]);
+  }, [next, prev, isPlaying, maxStep]);
 
   const step = flowSteps[flowStep];
+  const displayStep = flowSteps[displayedStep];
   const isActive = (id: string) => step.active.includes(id);
 
   return (
@@ -76,11 +181,15 @@ export default function FlowDiagram() {
         >
           <button
             onClick={() => {
-              setFlowStep(0);
-              setIsPlaying(true);
+              if (isPlaying) {
+                setIsPlaying(false);
+              } else {
+                if (flowStep >= maxStep) setFlowStep(0);
+                setIsPlaying(true);
+              }
             }}
             className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-[10px] sm:text-xs font-medium text-white"
-            aria-label="Play flow animation"
+            aria-label={isPlaying ? "Pause animation" : "Play animation"}
           >
             {isPlaying ? "⏸ Pause" : "▶ Play"}
           </button>
@@ -101,7 +210,10 @@ export default function FlowDiagram() {
             &rarr;
           </button>
           <button
-            onClick={reset}
+            onClick={() => {
+              setFlowStep(0);
+              setIsPlaying(false);
+            }}
             className="px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[9px] sm:text-[10px] text-white"
             aria-label="Reset flow animation"
           >
@@ -120,7 +232,78 @@ export default function FlowDiagram() {
             role="img"
             aria-label="Deployment lifecycle flow diagram showing steps from kubectl apply to running pods"
           >
-            {/* User Box */}
+            {/* Region backgrounds for context */}
+            <rect
+              x={138}
+              y={36}
+              width={400}
+              height={60}
+              rx={8}
+              fill="none"
+              stroke="#1e293b"
+              strokeWidth={1}
+              strokeDasharray="4 2"
+            />
+            <text
+              x={143}
+              y={47}
+              fill="#334155"
+              fontSize={7}
+              fontWeight={600}
+              letterSpacing="0.05em"
+            >
+              CONTROL PLANE
+            </text>
+
+            <rect
+              x={420}
+              y={152}
+              width={255}
+              height={128}
+              rx={8}
+              fill="none"
+              stroke="#1e293b"
+              strokeWidth={1}
+              strokeDasharray="4 2"
+            />
+            <text
+              x={425}
+              y={163}
+              fill="#334155"
+              fontSize={7}
+              fontWeight={600}
+              letterSpacing="0.05em"
+            >
+              WORKER NODE
+            </text>
+
+            {/* Active glow rings - always in DOM, opacity-transitioned */}
+            {boxes.map((box) => (
+              <rect
+                key={`glow-${box.id}`}
+                x={box.x - 3}
+                y={box.y - 3}
+                width={box.w + 6}
+                height={box.h + 6}
+                rx={8}
+                fill="none"
+                stroke={box.color}
+                strokeWidth={2}
+                style={{
+                  opacity: isActive(box.id) ? 1 : 0,
+                  transition: "opacity 0.5s ease",
+                }}
+              >
+                <animate
+                  attributeName="stroke-opacity"
+                  values="0.2;0.6;0.2"
+                  dur="2s"
+                  repeatCount="indefinite"
+                />
+              </rect>
+            ))}
+
+            {/* Component Boxes */}
             <rect
               x={25}
               y={115}
@@ -142,7 +325,6 @@ export default function FlowDiagram() {
               You
             </text>
 
-            {/* API Server */}
             <rect
               x={150}
               y={50}
@@ -157,7 +339,6 @@ export default function FlowDiagram() {
               API Server
             </text>
 
-            {/* Controllers */}
             <rect
               x={290}
               y={50}
@@ -172,7 +353,6 @@ export default function FlowDiagram() {
               Controllers
             </text>
 
-            {/* Scheduler */}
             <rect
               x={430}
               y={50}
@@ -187,7 +367,6 @@ export default function FlowDiagram() {
               Scheduler
             </text>
 
-            {/* Kubelet */}
             <rect
               x={430}
               y={165}
@@ -202,7 +381,6 @@ export default function FlowDiagram() {
               Kubelet
             </text>
 
-            {/* containerd */}
             <rect
               x={570}
               y={165}
@@ -217,7 +395,6 @@ export default function FlowDiagram() {
               containerd
             </text>
 
-            {/* kube-proxy */}
             <rect
               x={570}
               y={230}
@@ -232,7 +409,6 @@ export default function FlowDiagram() {
               kube-proxy
             </text>
 
-            {/* etcd */}
             <rect
               x={150}
               y={165}
@@ -253,121 +429,55 @@ export default function FlowDiagram() {
               etcd
             </text>
 
-            {/* Arrows */}
-            {flowStep >= 0 && (
-              <g style={{ opacity: 1 }}>
+            {/* Arrows - always rendered, fade in/out with CSS transitions */}
+            {arrowConfigs.map((a) => (
+              <g
+                key={a.id}
+                style={{
+                  opacity: flowStep >= a.appearsAt ? 1 : 0,
+                  transition: "opacity 0.5s ease",
+                }}
+              >
                 <Arrow
-                  id="f0"
-                  x1={100}
-                  y1={134}
-                  x2={148}
-                  y2={78}
-                  isActive={flowStep === 0}
-                  showPacket={flowStep === 0}
+                  id={a.id}
+                  x1={a.x1}
+                  y1={a.y1}
+                  x2={a.x2}
+                  y2={a.y2}
+                  isActive={a.activeSteps.includes(flowStep)}
+                  showPacket={flowStep === a.packetStep}
                 />
               </g>
-            )}
-            {flowStep >= 1 && (
-              <g style={{ opacity: 1 }}>
-                <Arrow
-                  id="f1"
-                  x1={197}
-                  y1={90}
-                  x2={197}
-                  y2={163}
-                  isActive={flowStep === 1}
-                  showPacket={flowStep === 1}
-                />
-              </g>
-            )}
-            {flowStep >= 2 && (
-              <g style={{ opacity: 1 }}>
-                <Arrow
-                  id="f2"
-                  x1={247}
-                  y1={69}
-                  x2={288}
-                  y2={69}
-                  isActive={flowStep === 2}
-                  showPacket={flowStep === 2}
-                />
-              </g>
-            )}
-            {flowStep >= 3 && (
-              <g style={{ opacity: 1 }}>
-                <Arrow
-                  id="f3"
-                  x1={387}
-                  y1={69}
-                  x2={428}
-                  y2={69}
-                  isActive={flowStep >= 3 && flowStep <= 4}
-                  showPacket={flowStep === 4}
-                />
-              </g>
-            )}
-            {flowStep >= 5 && (
-              <g style={{ opacity: 1 }}>
-                <Arrow
-                  id="f5"
-                  x1={477}
-                  y1={90}
-                  x2={477}
-                  y2={163}
-                  isActive={flowStep === 5}
-                  showPacket={flowStep === 5}
-                />
-              </g>
-            )}
-            {flowStep >= 6 && (
-              <g style={{ opacity: 1 }}>
-                <Arrow
-                  id="f6"
-                  x1={527}
-                  y1={184}
-                  x2={568}
-                  y2={184}
-                  isActive={flowStep === 6}
-                  showPacket={flowStep === 6}
-                />
-              </g>
-            )}
-            {flowStep >= 7 && (
-              <g style={{ opacity: 1 }}>
-                <Arrow
-                  id="f7"
-                  x1={527}
-                  y1={205}
-                  x2={568}
-                  y2={240}
-                  isActive={flowStep === 7}
-                  showPacket={flowStep === 7}
-                />
-              </g>
-            )}
+            ))}
           </svg>
         </div>
       </div>
 
-      {/* Description Panel */}
-      <div
-        key={flowStep}
-        className="animate-fade-in-up bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-emerald-500"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
-          <span className="bg-emerald-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">
-            Step {flowStep + 1}/{flowSteps.length}
-          </span>
-          <h3 className="text-xs sm:text-sm font-semibold text-white">
-            {step.label}
-          </h3>
+      {/* Description Panel - smooth crossfade, no layout shift */}
+      <div className="min-h-[76px]">
+        <div
+          className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-emerald-500"
+          style={{
+            opacity: transitioning ? 0 : 1,
+            transform: transitioning ? "translateY(6px)" : "translateY(0)",
+            transition: "opacity 0.18s ease, transform 0.18s ease",
+          }}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
+            <span className="bg-emerald-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">
+              Step {displayedStep + 1}/{flowSteps.length}
+            </span>
+            <h3 className="text-xs sm:text-sm font-semibold text-white">
+              {displayStep.label}
+            </h3>
+          </div>
+          <p className="text-slate-400 text-[10px] sm:text-xs">
+            {displayStep.description}
+          </p>
         </div>
-        <p className="text-slate-400 text-[10px] sm:text-xs">
-          {step.description}
-        </p>
       </div>
 
       {/* Step Navigation Tabs */}

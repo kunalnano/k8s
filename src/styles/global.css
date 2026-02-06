@@ -169,10 +169,13 @@ svg circle,
 svg path,
 svg text {
   transition:
-    fill 0.3s ease,
-    stroke 0.3s ease,
-    opacity 0.3s ease,
-    stroke-width 0.2s ease;
+    fill 0.4s ease,
+    stroke 0.4s ease,
+    opacity 0.4s ease,
+    stroke-width 0.3s ease;
+}
+svg g {
+  transition: opacity 0.5s ease;
 }
 
 /* ── Component node hover glow ── */

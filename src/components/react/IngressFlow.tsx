@@ -2,9 +2,135 @@ import { useState, useEffect, useCallback } from "react";
 import { ingressSteps } from "../../data/ingress-steps";
 import Arrow from "./architecture/Arrow";
 
+// All arrows defined upfront - always rendered, opacity controlled by step
+const arrowConfigs = [
+  {
+    id: "ing0",
+    x1: 102,
+    y1: 125,
+    x2: 138,
+    y2: 125,
+    appearsAt: 0,
+    activeSteps: [0],
+    packetStep: 0,
+  },
+  {
+    id: "ing1",
+    x1: 232,
+    y1: 125,
+    x2: 268,
+    y2: 125,
+    appearsAt: 1,
+    activeSteps: [1],
+    packetStep: 1,
+  },
+  {
+    id: "ing-rules",
+    x1: 320,
+    y1: 168,
+    x2: 320,
+    y2: 152,
+    appearsAt: 1,
+    activeSteps: [1, 2],
+    packetStep: -1,
+  },
+  {
+    id: "ing2",
+    x1: 372,
+    y1: 125,
+    x2: 408,
+    y2: 125,
+    appearsAt: 3,
+    activeSteps: [3],
+    packetStep: 3,
+  },
+  {
+    id: "ing3",
+    x1: 497,
+    y1: 110,
+    x2: 533,
+    y2: 102,
+    appearsAt: 4,
+    activeSteps: [4],
+    packetStep: 4,
+  },
+  {
+    id: "ing4",
+    x1: 612,
+    y1: 102,
+    x2: 638,
+    y2: 75,
+    appearsAt: 5,
+    activeSteps: [5],
+    packetStep: 5,
+  },
+];
+
+// Component boxes for glow ring overlays
+const boxes = [
+  {
+    id: "internet",
+    x: 20,
+    y: 100,
+    w: 80,
+    h: 50,
+    color: "#f97316",
+    activeSteps: [0],
+  },
+  {
+    id: "lb",
+    x: 140,
+    y: 100,
+    w: 90,
+    h: 50,
+    color: "#f97316",
+    activeSteps: [0],
+  },
+  {
+    id: "ingress",
+    x: 270,
+    y: 100,
+    w: 100,
+    h: 50,
+    color: "#8b5cf6",
+    activeSteps: [1, 2],
+  },
+  {
+    id: "service",
+    x: 410,
+    y: 100,
+    w: 85,
+    h: 50,
+    color: "#3b82f6",
+    activeSteps: [3],
+  },
+  {
+    id: "endpoints",
+    x: 535,
+    y: 85,
+    w: 75,
+    h: 35,
+    color: "#10b981",
+    activeSteps: [4],
+  },
+  {
+    id: "pods",
+    x: 640,
+    y: 55,
+    w: 60,
+    h: 135,
+    color: "#10b981",
+    activeSteps: [5],
+  },
+];
+
 export default function IngressFlow() {
   const [ingressStep, setIngressStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Smooth description transitions
+  const [displayedStep, setDisplayedStep] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
 
   const maxStep = ingressSteps.length - 1;
 
@@ -13,11 +139,6 @@ export default function IngressFlow() {
     [maxStep],
   );
   const prev = useCallback(() => setIngressStep((s) => Math.max(0, s - 1)), []);
-  const togglePlay = useCallback(() => setIsPlaying((p) => !p), []);
-  const reset = useCallback(() => {
-    setIngressStep(0);
-    setIsPlaying(false);
-  }, []);
 
   // Auto-advance when playing
   useEffect(() => {
@@ -30,9 +151,21 @@ export default function IngressFlow() {
         }
         return s + 1;
       });
-    }, 1500);
+    }, 2200);
     return () => clearInterval(timer);
   }, [isPlaying, maxStep]);
+
+  // Description crossfade
+  useEffect(() => {
+    if (ingressStep !== displayedStep) {
+      setTransitioning(true);
+      const timer = setTimeout(() => {
+        setDisplayedStep(ingressStep);
+        setTransitioning(false);
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [ingressStep, displayedStep]);
 
   // Keyboard handling
   useEffect(() => {
@@ -47,14 +180,22 @@ export default function IngressFlow() {
       }
       if (e.key === " ") {
         e.preventDefault();
-        togglePlay();
+        if (isPlaying) {
+          setIsPlaying(false);
+        } else {
+          setIngressStep((s) => {
+            if (s >= maxStep) return 0;
+            return s;
+          });
+          setIsPlaying(true);
+        }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [next, prev, togglePlay]);
+  }, [next, prev, isPlaying, maxStep]);
 
-  const step = ingressSteps[ingressStep];
+  const displayStep = ingressSteps[displayedStep];
 
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-5">
@@ -75,11 +216,15 @@ export default function IngressFlow() {
         >
           <button
             onClick={() => {
-              setIngressStep(0);
-              setIsPlaying(true);
+              if (isPlaying) {
+                setIsPlaying(false);
+              } else {
+                if (ingressStep >= maxStep) setIngressStep(0);
+                setIsPlaying(true);
+              }
             }}
             className="px-2.5 sm:px-3 py-1.5 bg-orange-600 hover:bg-orange-500 rounded-lg text-[10px] sm:text-xs font-medium text-white"
-            aria-label="Play ingress animation"
+            aria-label={isPlaying ? "Pause animation" : "Play animation"}
           >
             {isPlaying ? "⏸ Pause" : "▶ Play"}
           </button>
@@ -112,6 +257,55 @@ export default function IngressFlow() {
             role="img"
             aria-label="Ingress traffic flow diagram showing how external requests reach pods"
           >
+            {/* Region backgrounds */}
+            <rect
+              x={258}
+              y={82}
+              width={250}
+              height={165}
+              rx={8}
+              fill="none"
+              stroke="#1e293b"
+              strokeWidth={1}
+              strokeDasharray="4 2"
+            />
+            <text
+              x={263}
+              y={94}
+              fill="#334155"
+              fontSize={7}
+              fontWeight={600}
+              letterSpacing="0.05em"
+            >
+              CLUSTER
+            </text>
+
+            {/* Active glow rings */}
+            {boxes.map((box) => (
+              <rect
+                key={`glow-${box.id}`}
+                x={box.x - 3}
+                y={box.y - 3}
+                width={box.w + 6}
+                height={box.h + 6}
+                rx={8}
+                fill="none"
+                stroke={box.color}
+                strokeWidth={2}
+                style={{
+                  opacity: box.activeSteps.includes(ingressStep) ? 1 : 0,
+                  transition: "opacity 0.5s ease",
+                }}
+              >
+                <animate
+                  attributeName="stroke-opacity"
+                  values="0.2;0.6;0.2"
+                  dur="2s"
+                  repeatCount="indefinite"
+                />
+              </rect>
+            ))}
+
             {/* Internet */}
             <rect
               x={20}
@@ -302,98 +496,70 @@ export default function IngressFlow() {
               path: /v1/*
             </text>
 
-            {/* API Server connection to Ingress Rules */}
-            <Arrow
-              id="ing-rules"
-              x1={320}
-              y1={168}
-              x2={320}
-              y2={152}
-              isActive={ingressStep >= 1}
-            />
-
-            {/* Main flow arrows */}
-            <Arrow
-              id="ing0"
-              x1={102}
-              y1={125}
-              x2={138}
-              y2={125}
-              isActive={ingressStep >= 0}
-              showPacket={ingressStep === 0}
-            />
-            <Arrow
-              id="ing1"
-              x1={232}
-              y1={125}
-              x2={268}
-              y2={125}
-              isActive={ingressStep >= 1}
-              showPacket={ingressStep === 1}
-            />
-            <Arrow
-              id="ing2"
-              x1={372}
-              y1={125}
-              x2={408}
-              y2={125}
-              isActive={ingressStep >= 3}
-              showPacket={ingressStep === 3}
-            />
-            <Arrow
-              id="ing3"
-              x1={497}
-              y1={110}
-              x2={533}
-              y2={102}
-              isActive={ingressStep >= 4}
-              showPacket={ingressStep === 4}
-            />
-            <Arrow
-              id="ing4"
-              x1={612}
-              y1={102}
-              x2={638}
-              y2={75}
-              isActive={ingressStep >= 5}
-              showPacket={ingressStep === 5}
-            />
-
-            {/* Bypass label */}
-            {ingressStep >= 5 && (
-              <text
-                x={580}
-                y={55}
-                textAnchor="middle"
-                fill="#22c55e"
-                fontSize={7}
+            {/* Arrows - always rendered, fade in with CSS transitions */}
+            {arrowConfigs.map((a) => (
+              <g
+                key={a.id}
+                style={{
+                  opacity: ingressStep >= a.appearsAt ? 1 : 0,
+                  transition: "opacity 0.5s ease",
+                }}
               >
-                Direct to Pod IP!
-              </text>
-            )}
+                <Arrow
+                  id={a.id}
+                  x1={a.x1}
+                  y1={a.y1}
+                  x2={a.x2}
+                  y2={a.y2}
+                  isActive={a.activeSteps.includes(ingressStep)}
+                  showPacket={ingressStep === a.packetStep}
+                />
+              </g>
+            ))}
+
+            {/* Bypass label - fades in */}
+            <text
+              x={580}
+              y={55}
+              textAnchor="middle"
+              fill="#22c55e"
+              fontSize={7}
+              style={{
+                opacity: ingressStep >= 5 ? 1 : 0,
+                transition: "opacity 0.5s ease",
+              }}
+            >
+              Direct to Pod IP!
+            </text>
           </svg>
         </div>
       </div>
 
-      {/* Description Panel */}
-      <div
-        key={ingressStep}
-        className="animate-fade-in-up bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-orange-500"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
-          <span className="bg-orange-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">
-            Step {ingressStep + 1}/{ingressSteps.length}
-          </span>
-          <h3 className="text-xs sm:text-sm font-semibold text-white">
-            {step.label}
-          </h3>
+      {/* Description Panel - smooth crossfade */}
+      <div className="min-h-[76px]">
+        <div
+          className="bg-slate-800 rounded-xl p-3 sm:p-4 border-l-4 border-orange-500"
+          style={{
+            opacity: transitioning ? 0 : 1,
+            transform: transitioning ? "translateY(6px)" : "translateY(0)",
+            transition: "opacity 0.18s ease, transform 0.18s ease",
+          }}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
+            <span className="bg-orange-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full">
+              Step {displayedStep + 1}/{ingressSteps.length}
+            </span>
+            <h3 className="text-xs sm:text-sm font-semibold text-white">
+              {displayStep.label}
+            </h3>
+          </div>
+          <p className="text-slate-400 text-[10px] sm:text-xs">
+            {displayStep.description}
+          </p>
         </div>
-        <p className="text-slate-400 text-[10px] sm:text-xs">
-          {step.description}
-        </p>
       </div>
 
       {/* Step Navigation Tabs */}

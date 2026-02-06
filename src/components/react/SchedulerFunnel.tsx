@@ -4,6 +4,10 @@ import { schedulerSteps } from "../../data/scheduler-steps";
 export default function SchedulerFunnel() {
   const [schedulerStep, setSchedulerStep] = useState(0);
 
+  // Smooth description transitions
+  const [displayedStep, setDisplayedStep] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+
   const maxStep = schedulerSteps.length - 1;
 
   const nextStep = useCallback(
@@ -15,6 +19,18 @@ export default function SchedulerFunnel() {
     [],
   );
   const reset = useCallback(() => setSchedulerStep(0), []);
+
+  // Description crossfade
+  useEffect(() => {
+    if (schedulerStep !== displayedStep) {
+      setTransitioning(true);
+      const timer = setTimeout(() => {
+        setDisplayedStep(schedulerStep);
+        setTransitioning(false);
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [schedulerStep, displayedStep]);
 
   // Keyboard handling
   useEffect(() => {
@@ -33,6 +49,7 @@ export default function SchedulerFunnel() {
   }, [nextStep, prevStep]);
 
   const step = schedulerSteps[schedulerStep];
+  const displayStep = schedulerSteps[displayedStep];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
@@ -95,19 +112,23 @@ export default function SchedulerFunnel() {
 
       {/* Right Panel - Grid + Info */}
       <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 sm:p-4">
-        {/* Step description panel with fade-in-up on step change */}
+        {/* Step description - smooth crossfade */}
         <div
-          key={`desc-${schedulerStep}`}
-          className="mb-3 sm:mb-4 animate-fade-in-up"
+          className="mb-3 sm:mb-4 min-h-[52px]"
+          style={{
+            opacity: transitioning ? 0 : 1,
+            transform: transitioning ? "translateY(4px)" : "translateY(0)",
+            transition: "opacity 0.18s ease, transform 0.18s ease",
+          }}
         >
           <h3 className="text-xs sm:text-sm font-bold mb-1 text-white">
-            {step.label}
+            {displayStep.label}
           </h3>
           <p className="text-slate-400 text-[10px] sm:text-xs">
-            {step.description}
+            {displayStep.description}
           </p>
           <p className="text-slate-500 text-[9px] sm:text-[10px] mt-0.5">
-            {step.detail}
+            {displayStep.detail}
           </p>
         </div>
 
@@ -120,7 +141,6 @@ export default function SchedulerFunnel() {
             {Array.from({ length: 100 }).map((_, i) => {
               const isEligible = i < step.count;
               const isWinner = schedulerStep === maxStep && i === 0;
-              // Stagger delay: cells near the threshold transition later for a wave effect
               const row = Math.floor(i / 10);
               const col = i % 10;
               const staggerDelay = (row * 10 + col) * 8;
@@ -152,18 +172,22 @@ export default function SchedulerFunnel() {
           </div>
         </div>
 
-        {/* Insight */}
+        {/* Insight - smooth crossfade */}
         <div
-          key={`insight-${schedulerStep}`}
-          className="p-2.5 sm:p-3 bg-slate-800 rounded-lg animate-fade-in"
+          className="p-2.5 sm:p-3 bg-slate-800 rounded-lg min-h-[48px]"
+          style={{
+            opacity: transitioning ? 0 : 1,
+            transform: transitioning ? "translateY(4px)" : "translateY(0)",
+            transition: "opacity 0.18s ease, transform 0.18s ease",
+          }}
         >
           <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wider mb-1">
             Insight
           </div>
           <p className="text-slate-300 text-[10px] sm:text-xs">
-            {schedulerStep < 5
+            {displayedStep < 5
               ? "Filtering is elimination. Every predicate must pass."
-              : schedulerStep === 5
+              : displayedStep === 5
                 ? "Anti-affinity prevents co-location with matching pods."
                 : "Scoring ranks survivors. Weighted plugins sum to final score."}
           </p>
