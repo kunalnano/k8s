@@ -21,7 +21,7 @@ function isActive(href: string): boolean {
 ---
 
 <nav aria-label="Main navigation" class="overflow-x-auto scrollbar-none">
-  <ul class="flex gap-1 min-w-max px-4 sm:px-0" role="tablist">
+  <ul class="flex gap-2 min-w-max px-4 sm:px-0" role="tablist">
     {pages.map((page) => {
       const active = isActive(page.href);
       return (

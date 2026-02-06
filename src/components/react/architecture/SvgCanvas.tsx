@@ -62,8 +62,17 @@ export default function SvgCanvas({
           stroke="#3b82f6"
           strokeWidth={1.5}
           strokeDasharray="6 3"
+          strokeOpacity={0.35}
         />
-        <text x={30} y={38} fill="#3b82f6" fontSize={12} fontWeight={700}>
+        <text
+          x={30}
+          y={38}
+          fill="#3b82f6"
+          fontSize={12}
+          fontWeight={700}
+          letterSpacing="0.12em"
+          fillOpacity={0.6}
+        >
           CONTROL PLANE
         </text>
 
@@ -83,7 +92,7 @@ export default function SvgCanvas({
         <ComponentNode
           id="etcd"
           label="etcd"
-          x={190}
+          x={196}
           y={60}
           type="control"
           onClick={handleClick}
@@ -95,7 +104,7 @@ export default function SvgCanvas({
         <ComponentNode
           id="scheduler"
           label="Scheduler"
-          x={340}
+          x={352}
           y={60}
           type="control"
           onClick={handleClick}
@@ -107,7 +116,7 @@ export default function SvgCanvas({
         <ComponentNode
           id="controller"
           label="Controllers"
-          x={490}
+          x={508}
           y={60}
           type="control"
           onClick={handleClick}
@@ -122,7 +131,7 @@ export default function SvgCanvas({
           id="api-etcd"
           x1={162}
           y1={85}
-          x2={188}
+          x2={194}
           y2={85}
           isActive={isArrowActive("api-etcd")}
           showPacket={showPacketOn("api-etcd")}
@@ -131,7 +140,7 @@ export default function SvgCanvas({
           id="api-sched"
           x1={160}
           y1={72}
-          x2={340}
+          x2={352}
           y2={72}
           curved
           curveOffset={50}
@@ -142,7 +151,7 @@ export default function SvgCanvas({
           id="api-ctrl"
           x1={155}
           y1={62}
-          x2={490}
+          x2={508}
           y2={62}
           curved
           curveOffset={55}
@@ -158,11 +167,20 @@ export default function SvgCanvas({
           height={175}
           rx={10}
           fill="none"
-          stroke="#10b981"
+          stroke="#34d399"
           strokeWidth={1.5}
           strokeDasharray="6 3"
+          strokeOpacity={0.35}
         />
-        <text x={30} y={233} fill="#10b981" fontSize={12} fontWeight={700}>
+        <text
+          x={30}
+          y={233}
+          fill="#34d399"
+          fontSize={12}
+          fontWeight={700}
+          letterSpacing="0.12em"
+          fillOpacity={0.6}
+        >
           WORKER NODE
         </text>
 
@@ -182,7 +200,7 @@ export default function SvgCanvas({
         <ComponentNode
           id="kubeproxy"
           label="kube-proxy"
-          x={190}
+          x={196}
           y={255}
           type="worker"
           onClick={handleClick}
@@ -194,7 +212,7 @@ export default function SvgCanvas({
         <ComponentNode
           id="runtime"
           label="containerd"
-          x={340}
+          x={352}
           y={255}
           type="worker"
           onClick={handleClick}
@@ -206,7 +224,7 @@ export default function SvgCanvas({
 
         {/* Pods Box */}
         <rect
-          x={490}
+          x={508}
           y={248}
           width={145}
           height={75}
@@ -215,39 +233,68 @@ export default function SvgCanvas({
           stroke="#475569"
           strokeWidth={1}
         />
-        <text x={562} y={268} textAnchor="middle" fill="#94a3b8" fontSize={9}>
+        <text x={580} y={268} textAnchor="middle" fill="#94a3b8" fontSize={9}>
           PODS
         </text>
+        {/* Pod 1 — active */}
         <rect
-          x={505}
+          x={523}
           y={278}
           width={32}
           height={32}
           rx={4}
           fill="#0f172a"
-          stroke="#10b981"
+          stroke="#34d399"
           strokeWidth={1}
         />
+        {/* Pod 2 — empty slot */}
         <rect
-          x={545}
+          x={563}
           y={278}
           width={32}
           height={32}
           rx={4}
           fill="#0f172a"
-          stroke="#10b981"
+          stroke="#34d399"
           strokeWidth={1}
+          strokeDasharray="3 2"
+          strokeOpacity={0.5}
         />
+        <text
+          x={579}
+          y={298}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="#34d399"
+          fillOpacity={0.3}
+          fontSize={16}
+        >
+          &#x25A1;
+        </text>
+        {/* Pod 3 — empty slot */}
         <rect
-          x={585}
+          x={603}
           y={278}
           width={32}
           height={32}
           rx={4}
           fill="#0f172a"
-          stroke="#10b981"
+          stroke="#34d399"
           strokeWidth={1}
+          strokeDasharray="3 2"
+          strokeOpacity={0.5}
         />
+        <text
+          x={619}
+          y={298}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="#34d399"
+          fillOpacity={0.3}
+          fontSize={16}
+        >
+          &#x25A1;
+        </text>
 
         {/* Cross-plane Arrows */}
         <Arrow
@@ -261,21 +308,21 @@ export default function SvgCanvas({
         />
         <Arrow
           id="api-proxy"
-          customPath="M 145 112 L 250 253"
+          customPath="M 145 112 L 256 253"
           isActive={isArrowActive("api-proxy")}
           showPacket={showPacketOn("api-proxy")}
         />
         <Arrow
           id="kubelet-runtime"
-          customPath="M 160 300 L 188 320 L 340 320 L 340 300"
+          customPath="M 160 300 L 188 320 L 352 320 L 352 300"
           isActive={isArrowActive("kubelet-runtime")}
           showPacket={showPacketOn("kubelet-runtime")}
         />
         <Arrow
           id="runtime-pods"
-          x1={462}
+          x1={474}
           y1={285}
-          x2={488}
+          x2={506}
           y2={285}
           isActive={isArrowActive("runtime-pods")}
           showPacket={showPacketOn("runtime-pods")}

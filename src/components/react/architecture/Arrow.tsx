@@ -32,7 +32,11 @@ export default function Arrow({
   const path = customPath
     ? customPath
     : curved
-      ? `M ${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - curveOffset} ${x2} ${y2}`
+      ? (() => {
+          const midX = (x1 + x2) / 2;
+          const cpY = Math.min(y1, y2) - curveOffset;
+          return `M ${x1} ${y1} C ${x1 + (midX - x1) * 0.4} ${cpY}, ${x2 - (x2 - midX) * 0.4} ${cpY}, ${x2} ${y2}`;
+        })()
       : `M ${x1} ${y1} L ${x2} ${y2}`;
 
   return (

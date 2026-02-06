@@ -6,7 +6,7 @@
   --color-k8s-dark: #0f172a;
   --color-k8s-darker: #020617;
   --color-control-plane: #3b82f6;
-  --color-worker-node: #10b981;
+  --color-worker-node: #34d399;
   --color-danger: #ef4444;
   --color-warning: #f59e0b;
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
@@ -184,6 +184,7 @@ svg g {
 }
 .component-node-group:hover {
   transform: scale(1.04);
+  filter: brightness(1.12);
 }
 .component-node-group:hover .node-glow-rect {
   opacity: 1;
@@ -192,6 +193,15 @@ svg g {
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
+}
+
+/* ── Simulation dimming ── */
+.component-node-dim {
+  opacity: 0.35;
+  filter: saturate(0.5);
+  transition:
+    opacity 0.5s ease,
+    filter 0.5s ease;
 }
 
 /* ── Button hover micro-interactions ── */

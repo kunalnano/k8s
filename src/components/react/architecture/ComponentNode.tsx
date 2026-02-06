@@ -11,6 +11,7 @@ interface ComponentNodeProps {
   isFailed?: boolean;
   showScale?: boolean;
   isYamlHighlight?: boolean;
+  isDimmed?: boolean;
   scaleNote?: string;
 }
 
@@ -25,6 +26,7 @@ export default function ComponentNode({
   isFailed = false,
   showScale = false,
   isYamlHighlight = false,
+  isDimmed = false,
 }: ComponentNodeProps) {
   const fill = isFailed
     ? "#991b1b"
@@ -33,10 +35,10 @@ export default function ComponentNode({
       : isActive
         ? type === "control"
           ? "#3b82f6"
-          : "#10b981"
+          : "#34d399"
         : type === "control"
           ? "#1e3a5f"
-          : "#134e3a";
+          : "#15573f";
 
   const stroke = isFailed
     ? "#ef4444"
@@ -46,7 +48,7 @@ export default function ComponentNode({
         ? "#fff"
         : type === "control"
           ? "#3b82f6"
-          : "#10b981";
+          : "#34d399";
 
   const strokeWidth = isFailed || isYamlHighlight ? 3 : isActive ? 2.5 : 1.5;
 
@@ -56,7 +58,7 @@ export default function ComponentNode({
       ? "#a78bfa"
       : type === "control"
         ? "#3b82f6"
-        : "#10b981";
+        : "#34d399";
 
   const filterId = `glow-${id}`;
 
@@ -64,7 +66,7 @@ export default function ComponentNode({
 
   return (
     <g
-      className="component-node-group"
+      className={`component-node-group${isDimmed ? " component-node-dim" : ""}`}
       onClick={() => onClick(id)}
       style={{ cursor: "pointer", transformOrigin: `${x + 60}px ${y + 25}px` }}
       role="button"
@@ -88,6 +90,21 @@ export default function ComponentNode({
             <feMergeNode in="glow" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
+        </filter>
+        <filter
+          id={`${filterId}-shadow`}
+          x="-10%"
+          y="-10%"
+          width="130%"
+          height="140%"
+        >
+          <feDropShadow
+            dx="0"
+            dy="2"
+            stdDeviation="2.5"
+            floodColor="#000"
+            floodOpacity="0.4"
+          />
         </filter>
       </defs>
 
@@ -113,14 +130,16 @@ export default function ComponentNode({
         fill={fill}
         stroke={stroke}
         strokeWidth={strokeWidth}
+        filter={`url(#${filterId}-shadow)`}
         className="transition-all duration-300"
       />
 
       {/* Label */}
       <text
         x={x + 60}
-        y={y + 30}
+        y={y + 25}
         textAnchor="middle"
+        dominantBaseline="central"
         fill="#fff"
         fontSize={11}
         fontWeight={600}
