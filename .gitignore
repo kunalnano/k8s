@@ -32,5 +32,6 @@ logs/
 *.log
 
 # Cache
+.astro/
 .cache/
 .eslintcache
